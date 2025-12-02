@@ -119,7 +119,7 @@ export function getPaymentReminderTemplate(
           ${daysOverdue ? `<p style="color: #dc2626;">Days Overdue: ${daysOverdue}</p>` : ''}
         </div>
         <p>Please make the payment at your earliest convenience.</p>
-        <p style="margin-top: 30px;">Thank you!<br>'Accounts Team'}<br> <a href="https://biztalbox.com">biztalbox.com</a></p>
+        <p style="margin-top: 30px;">Thank you!<br>Accounts Team<br> <a href="https://biztalbox.com">biztalbox.com</a></p>
       </div>
     </body>
     </html>
