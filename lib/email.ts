@@ -15,21 +15,48 @@ export interface EmailOptions {
   subject: string;
   html: string;
   text?: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer | string;
+    contentType?: string;
+  }>;
+  replyTo?: string;
+  inReplyTo?: string;
+  references?: string;
 }
 
-export async function sendEmail(options: EmailOptions): Promise<{ success: boolean; message?: string; error?: string }> {
+export async function sendEmail(options: EmailOptions): Promise<{ success: boolean; message?: string; error?: string; messageId?: string }> {
   try {
-    const info = await transporter.sendMail({
+    const mailOptions: any = {
       from: `"${process.env.SMTP_FROM_NAME || 'Accounts Team'}" <${process.env.SMTP_FROM_EMAIL || 'accounts@biztalbox.com'}>`,
       to: options.to,
       subject: options.subject,
       text: options.text,
       html: options.html,
-    });
+    };
+
+    if (options.attachments) {
+      mailOptions.attachments = options.attachments;
+    }
+
+    if (options.replyTo) {
+      mailOptions.replyTo = options.replyTo;
+    }
+
+    if (options.inReplyTo) {
+      mailOptions.inReplyTo = options.inReplyTo;
+    }
+
+    if (options.references) {
+      mailOptions.references = options.references;
+    }
+
+    const info = await transporter.sendMail(mailOptions);
 
     return {
       success: true,
       message: 'Email sent successfully',
+      messageId: info.messageId,
     };
   } catch (error: any) {
     console.error('Email error:', error);
@@ -99,6 +126,41 @@ export function getPaymentReminderTemplate(
   `;
 }
 
+export function getInvoiceEmailTemplate(
+  clientName: string,
+  invoiceNumber: string,
+  amount: number,
+  dueDate?: string
+): string {
+  const dueDateText = dueDate ? `<p><strong>Due Date:</strong> ${dueDate}</p>` : '';
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0;">Invoice #${invoiceNumber}</h1>
+      </div>
+      <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px;">
+        <p>Dear ${clientName},</p>
+        <p>Thank you for your business! Please find attached the invoice for your reference.</p>
+        <div style="background: white; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <p><strong>Invoice Details:</strong></p>
+          <p><strong>Invoice Number:</strong> #${invoiceNumber}</p>
+          <p><strong>Total Amount:</strong> ₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+          ${dueDateText}
+        </div>
+        <p>If you have any questions or concerns regarding this invoice, please don't hesitate to contact us.</p>
+        <p style="margin-top: 30px;">Best regards,<br>${process.env.SMTP_FROM_NAME || 'Accounts Team'}<br>${process.env.SMTP_FROM_EMAIL || 'accounts@biztalbox.com'}</p>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
 export async function sendWelcomeEmail(to: string, clientName: string): Promise<{ success: boolean; message?: string; error?: string }> {
   const html = getWelcomeEmailTemplate(clientName, process.env.APP_NAME || 'Admin Panel');
   return sendEmail({
@@ -114,13 +176,39 @@ export async function sendPaymentReminder(
   invoiceNumber: string,
   amount: number,
   dueDate: string,
-  daysOverdue?: number
-): Promise<{ success: boolean; message?: string; error?: string }> {
+  daysOverdue?: number,
+  inReplyTo?: string,
+  references?: string
+): Promise<{ success: boolean; message?: string; error?: string; messageId?: string }> {
   const html = getPaymentReminderTemplate(clientName, invoiceNumber, amount, dueDate, daysOverdue);
   return sendEmail({
     to,
     subject: `Payment Reminder - Invoice #${invoiceNumber}`,
     html,
+    inReplyTo,
+    references,
   });
 }
 
+export async function sendInvoiceEmail(
+  to: string,
+  clientName: string,
+  invoiceNumber: string,
+  amount: number,
+  dueDate?: string,
+  pdfBuffer?: Buffer
+): Promise<{ success: boolean; message?: string; error?: string; messageId?: string }> {
+  const html = getInvoiceEmailTemplate(clientName, invoiceNumber, amount, dueDate);
+  const attachments = pdfBuffer ? [{
+    filename: `Invoice_${invoiceNumber}.pdf`,
+    content: pdfBuffer,
+    contentType: 'application/pdf',
+  }] : undefined;
+
+  return sendEmail({
+    to,
+    subject: `Invoice #${invoiceNumber} - ${process.env.SMTP_FROM_NAME || 'BIZTALBOX MARKETING & BUSINESS CONSULTING PVT. LTD.'}`,
+    html,
+    attachments,
+  });
+}

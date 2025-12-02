@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Save, Download, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Download, Trash2, Mail, Bell, History, X, MessageCircle } from 'lucide-react';
 import Link from 'next/link';
 import { downloadInvoicePDF } from '@/lib/pdf';
 
@@ -17,6 +17,11 @@ export default function EditInvoicePage() {
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [sendingInvoice, setSendingInvoice] = useState(false);
+  const [sendingReminder, setSendingReminder] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [emailHistory, setEmailHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [invoice, setInvoice] = useState<any>(null);
   const [client, setClient] = useState<any>(null);
   const [projects, setProjects] = useState<any[]>([]);
@@ -47,14 +52,9 @@ export default function EditInvoicePage() {
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const [invoiceRes, projectsRes] = await Promise.all([
-        axios.get(`/api/invoices/${invoiceId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get(`/api/projects`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }).catch(() => ({ data: { success: true, data: [] } })),
-      ]);
+      const invoiceRes = await axios.get(`/api/invoices/${invoiceId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (invoiceRes.data.success) {
         const inv = invoiceRes.data.data;
@@ -104,7 +104,7 @@ export default function EditInvoicePage() {
           setClient(clientRes.data.data);
         }
 
-        // Fetch projects for this client
+        // Fetch only projects for this client
         if (inv.client_id) {
           const clientProjectsRes = await axios.get(`/api/projects?client_id=${inv.client_id}`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -113,10 +113,6 @@ export default function EditInvoicePage() {
             setProjects(clientProjectsRes.data.data || []);
           }
         }
-      }
-
-      if (projectsRes.data.success) {
-        setProjects(projectsRes.data.data || []);
       }
     } catch (error: any) {
       console.error('Fetch error:', error);
@@ -195,6 +191,7 @@ export default function EditInvoicePage() {
         due_date: invoice.due_date,
         client: {
           name: client.name,
+          company: client.company,
           email: client.email,
           phone: client.phone,
           address: client.address,
@@ -254,6 +251,163 @@ export default function EditInvoicePage() {
     }
   };
 
+  const handleSendInvoice = async () => {
+    if (!invoice || !client) {
+      toast.error('Invoice or client data not available');
+      return;
+    }
+
+    if (!client.email) {
+      toast.error('Client email not found');
+      return;
+    }
+
+    setSendingInvoice(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`/api/invoices/${invoiceId}/send`, {}, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.data.success) {
+        toast.success('Invoice sent successfully!');
+      } else {
+        toast.error(response.data.error || 'Failed to send invoice');
+      }
+    } catch (error: any) {
+      console.error('Send invoice error:', error);
+      toast.error(error.response?.data?.error || 'Failed to send invoice. Please try again.');
+    } finally {
+      setSendingInvoice(false);
+    }
+  };
+
+  const handleSendReminder = async () => {
+    if (!invoice || !client) {
+      toast.error('Invoice or client data not available');
+      return;
+    }
+
+    if (!client.email) {
+      toast.error('Client email not found');
+      return;
+    }
+
+    setSendingReminder(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`/api/invoices/${invoiceId}/send-reminder`, {}, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.data.success) {
+        toast.success('Reminder sent successfully!');
+      } else {
+        toast.error(response.data.error || 'Failed to send reminder');
+      }
+    } catch (error: any) {
+      console.error('Send reminder error:', error);
+      toast.error(error.response?.data?.error || 'Failed to send reminder. Please try again.');
+    } finally {
+      setSendingReminder(false);
+    }
+  };
+
+  const fetchEmailHistory = async () => {
+    if (!invoiceId) return;
+    
+    setLoadingHistory(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`/api/reminders/history/${invoiceId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.data.success) {
+        setEmailHistory(response.data.data || []);
+      }
+    } catch (error: any) {
+      console.error('Fetch history error:', error);
+      toast.error('Failed to load email history');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleShowHistory = () => {
+    setShowHistoryModal(true);
+    fetchEmailHistory();
+  };
+
+  // Helper function to open WhatsApp with pre-filled message
+  // Constructs WhatsApp URL: https://wa.me/<PHONE>/?text=<ENCODED_MESSAGE>
+  // Normalizes phone by stripping all non-digits before putting it into the URL
+  const openWhatsApp = (phone: string, message: string) => {
+    if (!phone) {
+      toast.error('No WhatsApp number available for this client.');
+      return;
+    }
+    
+    // Normalize phone number: strip all non-digits
+    const normalizedPhone = phone.replace(/[^0-9]/g, '');
+    
+    if (!normalizedPhone) {
+      toast.error('No valid phone number found for this client.');
+      return;
+    }
+    
+    // Construct WhatsApp URL with encoded message
+    // Format: https://wa.me/<PHONE>/?text=<ENCODED_MESSAGE>
+    const url = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
+    
+    // Open in new tab
+    window.open(url, '_blank');
+  };
+
+  const handleSendWhatsApp = () => {
+    if (!invoice || !client) {
+      toast.error('Invoice or client data not available');
+      return;
+    }
+
+    const phone = client.whatsapp || client.phone;
+    if (!phone) {
+      toast.error('No WhatsApp number available for this client.');
+      return;
+    }
+
+    // Generate invoice URL - using the public route
+    // This allows clients to view/download the invoice without authentication
+    // Format: /api/invoices/[id]/public?token=[optional_token]
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const invoiceUrl = `${baseUrl}/api/invoices/${invoiceId}/public`;
+
+    // Format dates
+    const dueDate = invoice.due_date 
+      ? new Date(invoice.due_date).toLocaleDateString('en-IN', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        })
+      : 'Not specified';
+
+    const clientName = client.company || client.name;
+    const currencySymbol = invoice.currency_symbol || '₹';
+    const totalAmount = parseFloat(invoice.total_amount || 0);
+
+    // Build message dynamically from invoice data
+    // Format: Hi {client_name}, your invoice #{invoice_number} for {amount} is ready and due on {due_date}. You can view or download it here: {invoice_url}
+    const message = `Hi ${clientName}, your invoice #${invoice.invoice_number} for ${currencySymbol}${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })} is ready and due on ${dueDate}. You can view or download it here: ${invoiceUrl}`;
+
+    openWhatsApp(phone, message);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -287,6 +441,55 @@ export default function EditInvoicePage() {
         </div>
         <div className="flex items-center space-x-3">
           <button
+            onClick={handleSendInvoice}
+            disabled={sendingInvoice || !client?.email}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition"
+          >
+            {sendingInvoice ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>...</span>
+              </>
+            ) : (
+              <>
+                <Mail size={18} />
+                <span>Send</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleSendReminder}
+            disabled={sendingReminder || !client?.email}
+            className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition"
+          >
+            {sendingReminder ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>...</span>
+              </>
+            ) : (
+              <>
+                <Bell size={18} />
+                <span>Remind</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleSendWhatsApp}
+            disabled={!client?.whatsapp && !client?.phone}
+            className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition"
+            title="Send on Whatsapp"
+          >
+            <MessageCircle size={18} />
+            <span>Whatsapp</span>
+          </button>
+          <button
+            onClick={handleShowHistory}
+            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center space-x-2 transition"
+          >
+            <History size={18} />
+          </button>
+          <button
             onClick={handleExportPDF}
             disabled={exporting}
             className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition"
@@ -294,12 +497,12 @@ export default function EditInvoicePage() {
             {exporting ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Exporting...</span>
+                <span>...</span>
               </>
             ) : (
               <>
                 <Download size={18} />
-                <span>Export PDF</span>
+                <span>PDF</span>
               </>
             )}
           </button>
@@ -349,6 +552,71 @@ export default function EditInvoicePage() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email History Modal */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowHistoryModal(false)}>
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-800">Email History</h3>
+              <button
+                onClick={() => setShowHistoryModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            {loadingHistory ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : emailHistory.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No email history found</p>
+            ) : (
+              <div className="space-y-4">
+                {emailHistory.map((item: any) => (
+                  <div
+                    key={item.id}
+                    className={`border rounded-lg p-4 ${
+                      item.status === 'SENT' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                            item.status === 'SENT' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
+                          }`}>
+                            {item.status}
+                          </span>
+                          <span className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">
+                            {item.channel}
+                          </span>
+                          <span className="px-2 py-1 rounded text-xs bg-gray-100 text-gray-800">
+                            {item.reminder_type?.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                        {item.subject && (
+                          <h4 className="font-semibold text-gray-800 mb-1">{item.subject}</h4>
+                        )}
+                        {item.message && (
+                          <p className="text-sm text-gray-600 mb-2">{item.message}</p>
+                        )}
+                        {item.error_message && (
+                          <p className="text-sm text-red-600 mb-2">Error: {item.error_message}</p>
+                        )}
+                        <div className="text-xs text-gray-500">
+                          {item.sent_at ? new Date(item.sent_at).toLocaleString() : new Date(item.created_at).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

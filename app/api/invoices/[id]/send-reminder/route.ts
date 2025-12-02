@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/middleware';
 import { queryOne, query } from '@/lib/db';
-import { sendPaymentReminder as sendWhatsAppReminder } from '@/lib/whatsapp';
 import { sendPaymentReminder as sendEmailReminder } from '@/lib/email';
 import { generateId } from '@/lib/utils';
 
@@ -33,77 +32,64 @@ async function handlePost(
     const today = new Date();
     const daysOverdue = Math.max(0, Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)));
 
-    const phone = client.whatsapp || client.phone;
     const email = client.email;
     const reminderType = 'PAYMENT_REMINDER';
-    let whatsappSent = false;
     let emailSent = false;
     let errors: string[] = [];
 
-    // Send WhatsApp
-    if (phone) {
-      try {
-        await sendWhatsAppReminder(
-          phone,
-          client.name,
-          invoice.invoice_number,
-          parseFloat(invoice.total_amount),
-          dueDate.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }),
-          daysOverdue
-        );
-        
-        // Log reminder history
-        await query(
-          `INSERT INTO reminder_history (id, invoice_id, client_id, reminder_type, channel, message, status, sent_at, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-          [
-            generateId(),
-            invoice.id,
-            invoice.client_id,
-            reminderType,
-            'WHATSAPP',
-            `Payment reminder sent for invoice #${invoice.invoice_number}`,
-            'SENT',
-          ]
-        );
-        whatsappSent = true;
-      } catch (error) {
-        console.error('WhatsApp send error:', error);
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        errors.push(`WhatsApp: ${errorMsg}`);
-        await query(
-          `INSERT INTO reminder_history (id, invoice_id, client_id, reminder_type, channel, message, status, error_message, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-          [
-            generateId(),
-            invoice.id,
-            invoice.client_id,
-            reminderType,
-            'WHATSAPP',
-            `Payment reminder for invoice #${invoice.invoice_number}`,
-            'FAILED',
-            errorMsg,
-          ]
-        );
+    if (!email) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Client email not found. Cannot send reminder.',
+        },
+        { status: 400 }
+      );
+    }
+
+    // Find the most recent invoice email to reply to
+    // Try to get message_id, but handle if column doesn't exist
+    let previousEmail: any = null;
+    try {
+      previousEmail = await queryOne(
+        `SELECT message_id FROM reminder_history 
+         WHERE invoice_id = ? AND channel = 'EMAIL' AND reminder_type = 'INVOICE_SENT' AND status = 'SENT'
+         ORDER BY sent_at DESC LIMIT 1`,
+        [invoice.id]
+      );
+    } catch (error: any) {
+      // If message_id column doesn't exist, just continue without reply-to
+      if (!error.message?.includes('message_id') && error.code !== 'ER_BAD_FIELD_ERROR') {
+        throw error;
       }
     }
 
+    let inReplyTo: string | undefined;
+    let references: string | undefined;
+    if (previousEmail && previousEmail.message_id) {
+      inReplyTo = previousEmail.message_id;
+      references = previousEmail.message_id;
+    }
+
     // Send Email
-    if (email) {
+    try {
+      const billToName = client.company || client.name;
+      const result = await sendEmailReminder(
+        email,
+        billToName,
+        invoice.invoice_number,
+        parseFloat(invoice.total_amount),
+        dueDate.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }),
+        daysOverdue,
+        inReplyTo,
+        references
+      );
+      
+      // Log reminder history - try with message_id first, fallback if column doesn't exist
       try {
-        await sendEmailReminder(
-          email,
-          client.name,
-          invoice.invoice_number,
-          parseFloat(invoice.total_amount),
-          dueDate.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }),
-          daysOverdue
-        );
-        
-        // Log reminder history
         await query(
-          `INSERT INTO reminder_history (id, invoice_id, client_id, reminder_type, channel, message, subject, status, sent_at, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+          `INSERT INTO reminder_history (id, invoice_id, client_id, reminder_type, channel, message, subject, status, sent_at, created_at, message_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)`,
           [
             generateId(),
             invoice.id,
@@ -113,29 +99,50 @@ async function handlePost(
             `Payment reminder sent for invoice #${invoice.invoice_number}`,
             `Payment Reminder - Invoice #${invoice.invoice_number}`,
             'SENT',
+            result.messageId || null,
           ]
         );
-        emailSent = true;
-      } catch (error) {
-        console.error('Email send error:', error);
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        errors.push(`Email: ${errorMsg}`);
-        await query(
-          `INSERT INTO reminder_history (id, invoice_id, client_id, reminder_type, channel, message, subject, status, error_message, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-          [
-            generateId(),
-            invoice.id,
-            invoice.client_id,
-            reminderType,
-            'EMAIL',
-            `Payment reminder for invoice #${invoice.invoice_number}`,
-            `Payment Reminder - Invoice #${invoice.invoice_number}`,
-            'FAILED',
-            errorMsg,
-          ]
-        );
+      } catch (error: any) {
+        // If message_id column doesn't exist, insert without it
+        if (error.message?.includes('message_id') || error.code === 'ER_BAD_FIELD_ERROR') {
+          await query(
+            `INSERT INTO reminder_history (id, invoice_id, client_id, reminder_type, channel, message, subject, status, sent_at, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+            [
+              generateId(),
+              invoice.id,
+              invoice.client_id,
+              reminderType,
+              'EMAIL',
+              `Payment reminder sent for invoice #${invoice.invoice_number}`,
+              `Payment Reminder - Invoice #${invoice.invoice_number}`,
+              'SENT',
+            ]
+          );
+        } else {
+          throw error;
+        }
       }
+      emailSent = true;
+    } catch (error) {
+      console.error('Email send error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      errors.push(`Email: ${errorMsg}`);
+      await query(
+        `INSERT INTO reminder_history (id, invoice_id, client_id, reminder_type, channel, message, subject, status, error_message, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        [
+          generateId(),
+          invoice.id,
+          invoice.client_id,
+          reminderType,
+          'EMAIL',
+          `Payment reminder for invoice #${invoice.invoice_number}`,
+          `Payment Reminder - Invoice #${invoice.invoice_number}`,
+          'FAILED',
+          errorMsg,
+        ]
+      );
     }
 
     // Update invoice reminder tracking
@@ -147,12 +154,11 @@ async function handlePost(
       [invoice.id]
     );
 
-    if (whatsappSent || emailSent) {
+    if (emailSent) {
       return NextResponse.json({
         success: true,
-        message: `Reminder sent${whatsappSent && emailSent ? ' via WhatsApp and Email' : whatsappSent ? ' via WhatsApp' : ' via Email'}`,
+        message: 'Reminder sent via Email',
         data: {
-          whatsappSent,
           emailSent,
           errors: errors.length > 0 ? errors : undefined,
         },
@@ -161,7 +167,7 @@ async function handlePost(
       return NextResponse.json(
         {
           success: false,
-          error: 'Failed to send reminder. No contact method available or all methods failed.',
+          error: 'Failed to send reminder.',
           errors,
         },
         { status: 400 }

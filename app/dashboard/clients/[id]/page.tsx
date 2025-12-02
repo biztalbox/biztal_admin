@@ -34,7 +34,7 @@ export default function ClientViewPage() {
   const [sendingReminder, setSendingReminder] = useState<string | null>(null);
   const [reminderHistory, setReminderHistory] = useState<any[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
-  const [historyTab, setHistoryTab] = useState<'all' | 'whatsapp' | 'email'>('all');
+  const [historyTab, setHistoryTab] = useState<'all' | 'email'>('all');
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   
   // Custom message modals
@@ -105,7 +105,8 @@ export default function ClientViewPage() {
 
   const filteredHistory = reminderHistory.filter((item) => {
     if (historyTab === 'all') return true;
-    return item.channel === historyTab.toUpperCase();
+    // Only show email channel when email tab is selected
+    return item.channel === 'EMAIL';
   });
 
   const handleSendWhatsApp = async () => {
@@ -733,16 +734,6 @@ export default function ClientViewPage() {
                   }`}
                 >
                   All
-                </button>
-                <button
-                  onClick={() => setHistoryTab('whatsapp')}
-                  className={`pb-2 px-4 font-medium transition ${
-                    historyTab === 'whatsapp'
-                      ? 'border-b-2 border-blue-600 text-blue-600'
-                      : 'text-gray-600 hover:text-gray-800'
-                  }`}
-                >
-                  WhatsApp
                 </button>
                 <button
                   onClick={() => setHistoryTab('email')}

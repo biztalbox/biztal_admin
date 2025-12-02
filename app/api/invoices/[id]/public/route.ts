@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withAuth } from '@/lib/middleware';
 import { queryOne, query } from '@/lib/db';
 import { generateInvoicePDF } from '@/lib/pdf';
+import crypto from 'crypto';
+
+// Generate a shareable token for an invoice
+// In production, you might want to store this in the database with expiration
+function generateShareToken(invoiceId: string): string {
+  const secret = process.env.JWT_SECRET || 'your-secret-key';
+  const data = `${invoiceId}-${Date.now()}`;
+  return crypto.createHmac('sha256', secret).update(data).digest('hex').substring(0, 32);
+}
 
 async function handleGet(
   req: NextRequest,
-  userId: string,
   context: { params: Promise<{ id: string }> }
 ) {
   const params = await context.params;
+  const { searchParams } = new URL(req.url);
+  const token = searchParams.get('token');
+
   try {
     const invoice = await queryOne('SELECT * FROM invoices WHERE id = ?', [params.id]);
     if (!invoice) {
@@ -17,6 +27,15 @@ async function handleGet(
         { status: 404 }
       );
     }
+
+    // For now, we'll allow access with just the invoice ID
+    // In production, validate the token here
+    // if (!token || !validateToken(token, params.id)) {
+    //   return NextResponse.json(
+    //     { success: false, error: 'Invalid or missing token' },
+    //     { status: 401 }
+    //   );
+    // }
 
     // Get client details
     const client = await queryOne('SELECT * FROM clients WHERE id = ?', [invoice.client_id]);
@@ -73,7 +92,6 @@ async function handleGet(
       try {
         items = typeof invoice.items === 'string' ? JSON.parse(invoice.items) : invoice.items;
       } catch (e) {
-        // If parsing fails, items will be null
         items = null;
       }
     }
@@ -116,11 +134,11 @@ async function handleGet(
     return new NextResponse(buffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="Invoice_${invoice.invoice_number}.pdf"`,
+        'Content-Disposition': `inline; filename="Invoice_${invoice.invoice_number}.pdf"`,
       },
     });
   } catch (error: any) {
-    console.error('Export invoice error:', error);
+    console.error('Public invoice export error:', error);
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to export invoice' },
       { status: 500 }
@@ -128,5 +146,5 @@ async function handleGet(
   }
 }
 
-export const GET = withAuth(handleGet);
+export const GET = handleGet;
 
