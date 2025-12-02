@@ -119,7 +119,7 @@ export function getPaymentReminderTemplate(
           ${daysOverdue ? `<p style="color: #dc2626;">Days Overdue: ${daysOverdue}</p>` : ''}
         </div>
         <p>Please make the payment at your earliest convenience.</p>
-        <p style="margin-top: 30px;">Thank you!</p>
+        <p style="margin-top: 30px;">Thank you!<br>'Accounts Team'}<br> <a href="https://biztalbox.com">biztalbox.com</a></p>
       </div>
     </body>
     </html>
@@ -146,15 +146,15 @@ export function getInvoiceEmailTemplate(
       </div>
       <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px;">
         <p>Dear ${clientName},</p>
-        <p>Thank you for your business! Please find attached the invoice for your reference.</p>
+        <p>Attaching the invoice for your reference. We would appreciate your support in clearing the payment within the due timeline.</p>
         <div style="background: white; padding: 20px; border-radius: 5px; margin: 20px 0;">
           <p><strong>Invoice Details:</strong></p>
           <p><strong>Invoice Number:</strong> #${invoiceNumber}</p>
           <p><strong>Total Amount:</strong> ₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
           ${dueDateText}
         </div>
-        <p>If you have any questions or concerns regarding this invoice, please don't hesitate to contact us.</p>
-        <p style="margin-top: 30px;">Best regards,<br>${process.env.SMTP_FROM_NAME || 'Accounts Team'}<br>${process.env.SMTP_FROM_EMAIL || 'accounts@biztalbox.com'}</p>
+        <p>Thank you and looking forward to continuing our collaboration.</p>
+        <p style="margin-top: 30px;">Best regards,<br>${process.env.SMTP_FROM_NAME || 'Accounts Team'}<br><a href="https://biztalbox.com">biztalbox.com</a></p>
       </div>
     </body>
     </html>
@@ -162,7 +162,7 @@ export function getInvoiceEmailTemplate(
 }
 
 export async function sendWelcomeEmail(to: string, clientName: string): Promise<{ success: boolean; message?: string; error?: string }> {
-  const html = getWelcomeEmailTemplate(clientName, process.env.APP_NAME || 'Admin Panel');
+  const html = getWelcomeEmailTemplate(clientName, process.env.APP_NAME || 'Biztalbox');
   return sendEmail({
     to,
     subject: `Welcome to ${process.env.APP_NAME || 'Admin Panel'}!`,

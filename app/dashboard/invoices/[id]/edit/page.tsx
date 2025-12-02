@@ -402,8 +402,19 @@ export default function EditInvoicePage() {
     const totalAmount = parseFloat(invoice.total_amount || 0);
 
     // Build message dynamically from invoice data
-    // Format: Hi {client_name}, your invoice #{invoice_number} for {amount} is ready and due on {due_date}. You can view or download it here: {invoice_url}
-    const message = `Hi ${clientName}, your invoice #${invoice.invoice_number} for ${currencySymbol}${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })} is ready and due on ${dueDate}. You can view or download it here: ${invoiceUrl}`;
+    // Professional message format incorporating invoice details and payment request
+    const message = `Dear ${clientName},
+
+Attaching the invoice for your reference. We would appreciate your support in clearing the payment within the due timeline.
+
+Invoice Details:
+Invoice Number: #${invoice.invoice_number}
+Total Amount: ${currencySymbol}${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+Due Date: ${dueDate}
+
+You can view or download the invoice here: ${invoiceUrl}
+
+Thank you and looking forward to continuing our collaboration.`;
 
     openWhatsApp(phone, message);
   };
