@@ -12,13 +12,14 @@ function CreateInvoiceForm() {
   const searchParams = useSearchParams();
   const clientId = searchParams.get('client_id');
   const [loading, setLoading] = useState(false);
+  const [invoiceNumberLoading, setInvoiceNumberLoading] = useState(false);
   const [clients, setClients] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     client_id: clientId || '',
     project_id: '',
-    invoice_number: `INV-${Date.now()}`,
+    invoice_number: 'Generating…',
     amount: '',
     tax: '0',
     discount: '0',
@@ -37,6 +38,32 @@ function CreateInvoiceForm() {
       fetchProjects(clientId);
     }
   }, [clientId]);
+
+  useEffect(() => {
+    fetchNextInvoiceNumber();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchNextInvoiceNumber = async () => {
+    setInvoiceNumberLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('/api/invoices?next_number=1', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data?.success && response.data?.data?.invoice_number) {
+        setFormData((prev) => ({ ...prev, invoice_number: response.data.data.invoice_number }));
+      } else {
+        // Server will still assign on save, but keep UI informative.
+        setFormData((prev) => ({ ...prev, invoice_number: 'Will be assigned on save' }));
+      }
+    } catch (error) {
+      console.error('Fetch next invoice number error:', error);
+      setFormData((prev) => ({ ...prev, invoice_number: 'Will be assigned on save' }));
+    } finally {
+      setInvoiceNumberLoading(false);
+    }
+  };
 
   const fetchClients = async () => {
     try {
@@ -98,8 +125,8 @@ function CreateInvoiceForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.client_id || !formData.invoice_number || !formData.amount) {
-      toast.error('Client, invoice number, and amount are required');
+    if (!formData.client_id || !formData.amount) {
+      toast.error('Client and amount are required');
       return;
     }
 
@@ -271,10 +298,13 @@ function CreateInvoiceForm() {
               id="invoice_number"
               name="invoice_number"
               value={formData.invoice_number}
-              onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              readOnly
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+            <p className="text-xs text-gray-500 mt-1">
+              {invoiceNumberLoading ? 'Generating invoice number…' : 'Auto-generated (BINV{M}{D}{Y}####)'}
+            </p>
           </div>
 
           <div>

@@ -175,11 +175,11 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
     yPos += (addressLines.length - 1) * 6;
   }
   
-  if (invoice.client.city || invoice.client.state || invoice.client.zip_code) {
-    yPos += 6;
-    const cityState = [invoice.client.city, invoice.client.state, invoice.client.zip_code].filter(Boolean).join(', ');
-    doc.text(cityState, leftColumnX, yPos);
-  }
+  // if (invoice.client.city || invoice.client.state || invoice.client.zip_code) {
+  //   yPos += 6;
+  //   const cityState = [invoice.client.city, invoice.client.state, invoice.client.zip_code].filter(Boolean).join(', ');
+  //   doc.text(cityState, leftColumnX, yPos);
+  // }
   
   if (invoice.client.gst_no) {
     yPos += 6;

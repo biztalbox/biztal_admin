@@ -1,12 +1,69 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/middleware';
-import { query, queryOne, execute } from '@/lib/db';
+import { query, queryOne, beginTransaction, commit, rollback } from '@/lib/db';
 import { generateId } from '@/lib/utils';
+
+function getInvoicePrefix(now = new Date()): string {
+  // M = first capital letter of current month (J, F, M, etc.)
+  const monthLetter = now
+    .toLocaleString('en-US', { month: 'short' })
+    .charAt(0)
+    .toUpperCase();
+
+  // D = current date (01, 02, 27, etc.)
+  const day = String(now.getDate()).padStart(2, '0');
+
+  // Y = last two digit of current year (25, 26, etc.)
+  const year2 = String(now.getFullYear()).slice(-2);
+
+  return `BINV${monthLetter}${day}${year2}`;
+}
+
+async function getNextInvoiceNumberInTx(
+  connection: Awaited<ReturnType<typeof beginTransaction>>,
+  prefix: string
+): Promise<string> {
+  const like = `${prefix}%`;
+
+  // Use a transaction + FOR UPDATE to reduce race conditions for sequential numbers.
+  const [rows] = await connection.execute(
+    'SELECT invoice_number FROM invoices WHERE invoice_number LIKE ? ORDER BY invoice_number DESC LIMIT 1 FOR UPDATE',
+    [like]
+  );
+
+  const last = Array.isArray(rows) && rows.length > 0 ? (rows as any[])[0]?.invoice_number : null;
+  let nextSeq = 1;
+
+  if (typeof last === 'string') {
+    const match = last.match(new RegExp(`^${prefix}(\\d{4})$`));
+    if (match?.[1]) {
+      const n = parseInt(match[1], 10);
+      if (!Number.isNaN(n)) nextSeq = n + 1;
+    }
+  }
+
+  return `${prefix}${String(nextSeq).padStart(4, '0')}`;
+}
 
 async function handleGet(req: NextRequest, userId: string) {
   try {
     const { searchParams } = new URL(req.url);
     const clientId = searchParams.get('client_id');
+    const nextNumber = searchParams.get('next_number');
+
+    // Get next invoice number for "Create Invoice" UI.
+    if (nextNumber === '1') {
+      const connection = await beginTransaction();
+      try {
+        const prefix = getInvoicePrefix(new Date());
+        const invoice_number = await getNextInvoiceNumberInTx(connection, prefix);
+        await commit(connection);
+        return NextResponse.json({ success: true, data: { invoice_number } });
+      } catch (error: any) {
+        await rollback(connection);
+        throw error;
+      }
+    }
 
     let sql = 'SELECT * FROM invoices WHERE 1=1';
     const params: any[] = [];
@@ -39,7 +96,6 @@ async function handlePost(req: NextRequest, userId: string) {
       client_id,
       project_id,
       project_ids,
-      invoice_number,
       amount,
       tax = 0,
       discount = 0,
@@ -53,18 +109,9 @@ async function handlePost(req: NextRequest, userId: string) {
       currency_symbol = '₹',
     } = body;
 
-    if (!client_id || !invoice_number || amount === undefined || total_amount === undefined) {
+    if (!client_id || amount === undefined || total_amount === undefined) {
       return NextResponse.json(
-        { success: false, error: 'Client ID, invoice number, amount, and total amount are required' },
-        { status: 400 }
-      );
-    }
-
-    // Check if invoice number already exists
-    const existing = await queryOne('SELECT id FROM invoices WHERE invoice_number = ?', [invoice_number]);
-    if (existing) {
-      return NextResponse.json(
-        { success: false, error: 'Invoice number already exists' },
+        { success: false, error: 'Client ID, amount, and total amount are required' },
         { status: 400 }
       );
     }
@@ -74,44 +121,23 @@ async function handlePost(req: NextRequest, userId: string) {
     const projectIdsJson = project_ids && Array.isArray(project_ids) && project_ids.length > 0
       ? JSON.stringify(project_ids)
       : null;
-    
-    // Try to insert with project_ids first
+
+    const connection = await beginTransaction();
+    let generatedInvoiceNumber: string | null = null;
     try {
-      await execute(
-        `INSERT INTO invoices (id, client_id, project_id, project_ids, invoice_number, amount, tax, discount, total_amount, status, due_date, issued_date, notes, items, currency, currency_symbol)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          id,
-          client_id,
-          project_id || null,
-          projectIdsJson,
-          invoice_number,
-          parseFloat(amount),
-          parseFloat(tax || 0),
-          parseFloat(discount || 0),
-          parseFloat(total_amount),
-          status,
-          due_date || null,
-          issued_date || null,
-          notes || null,
-          items ? JSON.stringify(items) : null,
-          currency || 'INR',
-          currency_symbol || '₹',
-        ]
-      );
-    } catch (error: any) {
-      // If project_ids column doesn't exist, log warning and try without it
-      if (error.message.includes('project_ids')) {
-        console.warn('project_ids column does not exist. Please run migration: database_migrations_project_ids.sql');
+      const prefix = getInvoicePrefix(new Date());
+      const insertWithFallbacks = async (invoiceNo: string) => {
+        // Try to insert with project_ids first
         try {
-          await execute(
-            `INSERT INTO invoices (id, client_id, project_id, invoice_number, amount, tax, discount, total_amount, status, due_date, issued_date, notes, items, currency, currency_symbol)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          await connection.execute(
+            `INSERT INTO invoices (id, client_id, project_id, project_ids, invoice_number, amount, tax, discount, total_amount, status, due_date, issued_date, notes, items, currency, currency_symbol)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               id,
               client_id,
               project_id || null,
-              invoice_number,
+              projectIdsJson,
+              invoiceNo,
               parseFloat(amount),
               parseFloat(tax || 0),
               parseFloat(discount || 0),
@@ -125,17 +151,69 @@ async function handlePost(req: NextRequest, userId: string) {
               currency_symbol || '₹',
             ]
           );
-        } catch (fallbackError: any) {
-          // If currency columns also don't exist, try without them
-          if (fallbackError.message.includes('currency')) {
-            await execute(
-              `INSERT INTO invoices (id, client_id, project_id, invoice_number, amount, tax, discount, total_amount, status, due_date, issued_date, notes, items)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        } catch (error: any) {
+          // If project_ids column doesn't exist, log warning and try without it
+          if (error.message.includes('project_ids')) {
+            console.warn('project_ids column does not exist. Please run migration: database_migrations_project_ids.sql');
+            try {
+              await connection.execute(
+                `INSERT INTO invoices (id, client_id, project_id, invoice_number, amount, tax, discount, total_amount, status, due_date, issued_date, notes, items, currency, currency_symbol)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  id,
+                  client_id,
+                  project_id || null,
+                  invoiceNo,
+                  parseFloat(amount),
+                  parseFloat(tax || 0),
+                  parseFloat(discount || 0),
+                  parseFloat(total_amount),
+                  status,
+                  due_date || null,
+                  issued_date || null,
+                  notes || null,
+                  items ? JSON.stringify(items) : null,
+                  currency || 'INR',
+                  currency_symbol || '₹',
+                ]
+              );
+            } catch (fallbackError: any) {
+              // If currency columns also don't exist, try without them
+              if (fallbackError.message.includes('currency')) {
+                await connection.execute(
+                  `INSERT INTO invoices (id, client_id, project_id, invoice_number, amount, tax, discount, total_amount, status, due_date, issued_date, notes, items)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  [
+                    id,
+                    client_id,
+                    project_id || null,
+                    invoiceNo,
+                    parseFloat(amount),
+                    parseFloat(tax || 0),
+                    parseFloat(discount || 0),
+                    parseFloat(total_amount),
+                    status,
+                    due_date || null,
+                    issued_date || null,
+                    notes || null,
+                    items ? JSON.stringify(items) : null,
+                  ]
+                );
+              } else {
+                throw fallbackError;
+              }
+            }
+          } else if (error.message.includes('currency')) {
+            // If only currency columns don't exist
+            await connection.execute(
+              `INSERT INTO invoices (id, client_id, project_id, project_ids, invoice_number, amount, tax, discount, total_amount, status, due_date, issued_date, notes, items)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 id,
                 client_id,
                 project_id || null,
-                invoice_number,
+                projectIdsJson,
+                invoiceNo,
                 parseFloat(amount),
                 parseFloat(tax || 0),
                 parseFloat(discount || 0),
@@ -148,34 +226,33 @@ async function handlePost(req: NextRequest, userId: string) {
               ]
             );
           } else {
-            throw fallbackError;
+            throw error;
           }
         }
-      } else if (error.message.includes('currency')) {
-        // If only currency columns don't exist
-        await execute(
-          `INSERT INTO invoices (id, client_id, project_id, project_ids, invoice_number, amount, tax, discount, total_amount, status, due_date, issued_date, notes, items)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            id,
-            client_id,
-            project_id || null,
-            projectIdsJson,
-            invoice_number,
-            parseFloat(amount),
-            parseFloat(tax || 0),
-            parseFloat(discount || 0),
-            parseFloat(total_amount),
-            status,
-            due_date || null,
-            issued_date || null,
-            notes || null,
-            items ? JSON.stringify(items) : null,
-          ]
-        );
-      } else {
-        throw error;
+      };
+
+      // Best-effort retry if there's a unique constraint race.
+      for (let attempt = 0; attempt < 5; attempt++) {
+        generatedInvoiceNumber = await getNextInvoiceNumberInTx(connection, prefix);
+        try {
+          await insertWithFallbacks(generatedInvoiceNumber);
+          break;
+        } catch (error: any) {
+          const msg = String(error?.message || '');
+          const isDuplicate =
+            error?.code === 'ER_DUP_ENTRY' ||
+            msg.toLowerCase().includes('duplicate') ||
+            msg.toLowerCase().includes('invoice_number');
+
+          if (isDuplicate && attempt < 4) continue;
+          throw error;
+        }
       }
+
+      await commit(connection);
+    } catch (error: any) {
+      await rollback(connection);
+      throw error;
     }
 
     const invoice = await queryOne('SELECT * FROM invoices WHERE id = ?', [id]);
