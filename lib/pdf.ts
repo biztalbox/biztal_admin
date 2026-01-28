@@ -158,11 +158,6 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
   const billToName = invoice.client.company || invoice.client.name;
   doc.text(billToName, leftColumnX, yPos);
   
-  if (invoice.client.email) {
-    yPos += 6;
-    doc.text(`Email: ${invoice.client.email}`, leftColumnX, yPos);
-  }
-  
   if (invoice.client.phone) {
     yPos += 6;
     doc.text(`Phone: ${invoice.client.phone}`, leftColumnX, yPos);
@@ -186,7 +181,7 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
     doc.setFont('sans-serif', 'normal');
     doc.text('GST: ', leftColumnX, yPos);
     doc.setFont('sans-serif', 'normal'); // Use courier for GST number
-    doc.text(invoice.client.gst_no, leftColumnX + 15, yPos);
+    doc.text(invoice.client.gst_no, leftColumnX + 6, yPos);
     doc.setFont('sans-serif', 'normal'); // Reset to default font
   }
 
