@@ -181,7 +181,7 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
     doc.setFont('sans-serif', 'normal');
     doc.text('GST: ', leftColumnX, yPos);
     doc.setFont('sans-serif', 'normal'); // Use courier for GST number
-    doc.text(invoice.client.gst_no, leftColumnX + 6, yPos);
+    doc.text(invoice.client.gst_no, leftColumnX + 10, yPos);
     doc.setFont('sans-serif', 'normal'); // Reset to default font
   }
 
