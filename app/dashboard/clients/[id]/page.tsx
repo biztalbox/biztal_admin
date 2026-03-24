@@ -265,6 +265,12 @@ export default function ClientViewPage() {
                 <label className="text-sm font-medium text-gray-500">Email</label>
                 <p className="text-gray-800 mt-1">{client.email}</p>
               </div>
+              {client.secondary_email && (
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Secondary emails (CC)</label>
+                  <p className="text-gray-800 mt-1 whitespace-pre-wrap break-words">{client.secondary_email}</p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-gray-500">Phone</label>

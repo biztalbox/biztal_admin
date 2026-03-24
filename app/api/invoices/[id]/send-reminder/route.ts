@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/middleware';
 import { queryOne, query } from '@/lib/db';
 import { sendPaymentReminder as sendEmailReminder } from '@/lib/email';
-import { generateId } from '@/lib/utils';
+import { generateId, parseSecondaryEmailsForCc } from '@/lib/utils';
 
 async function handlePost(
   req: NextRequest,
@@ -71,6 +71,8 @@ async function handlePost(
       references = previousEmail.message_id;
     }
 
+    const cc = parseSecondaryEmailsForCc(client.secondary_email, email);
+
     // Send Email
     try {
       const billToName = client.company || client.name;
@@ -82,7 +84,8 @@ async function handlePost(
         dueDate.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }),
         daysOverdue,
         inReplyTo,
-        references
+        references,
+        cc.length > 0 ? cc : undefined
       );
       
       // Log reminder history - try with message_id first, fallback if column doesn't exist

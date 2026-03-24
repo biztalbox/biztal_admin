@@ -15,16 +15,16 @@ async function handleGet(req: NextRequest, userId: string) {
     const params: any[] = [];
 
     if (search) {
-      sql += ' AND (name LIKE ? OR email LIKE ? OR phone LIKE ? OR company LIKE ?)';
+      sql += ' AND (name LIKE ? OR email LIKE ? OR secondary_email LIKE ? OR phone LIKE ? OR company LIKE ?)';
       const searchTerm = `%${search}%`;
-      params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
     sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
     const clients = await query(sql, params);
-    const totalResult = await queryOne('SELECT COUNT(*) as total FROM clients WHERE 1=1' + (search ? ' AND (name LIKE ? OR email LIKE ? OR phone LIKE ? OR company LIKE ?)' : ''), search ? [`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`] : []);
+    const totalResult = await queryOne('SELECT COUNT(*) as total FROM clients WHERE 1=1' + (search ? ' AND (name LIKE ? OR email LIKE ? OR secondary_email LIKE ? OR phone LIKE ? OR company LIKE ?)' : ''), search ? [`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`] : []);
     const total = totalResult?.total || 0;
 
     return NextResponse.json({
@@ -52,6 +52,7 @@ async function handlePost(req: NextRequest, userId: string) {
     const {
       name,
       email,
+      secondary_email,
       phone,
       whatsapp,
       company,
@@ -85,12 +86,13 @@ async function handlePost(req: NextRequest, userId: string) {
 
     const id = generateId();
     await execute(
-      `INSERT INTO clients (id, name, email, phone, whatsapp, company, address, city, state, zip_code, country, website, gst_no, contact_person, remark, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO clients (id, name, email, secondary_email, phone, whatsapp, company, address, city, state, zip_code, country, website, gst_no, contact_person, remark, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         name,
         email,
+        secondary_email?.trim() || null,
         phone || null,
         whatsapp || null,
         company || null,

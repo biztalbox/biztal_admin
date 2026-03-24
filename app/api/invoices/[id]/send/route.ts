@@ -3,7 +3,7 @@ import { withAuth } from '@/lib/middleware';
 import { queryOne, query } from '@/lib/db';
 import { generateInvoicePDF } from '@/lib/pdf';
 import { sendInvoiceEmail } from '@/lib/email';
-import { generateId } from '@/lib/utils';
+import { generateId, parseSecondaryEmailsForCc } from '@/lib/utils';
 
 async function handlePost(
   req: NextRequest,
@@ -134,13 +134,16 @@ async function handlePost(
 
     // Send email with PDF attachment
     const billToName = client.company || client.name;
+    const cc = parseSecondaryEmailsForCc(client.secondary_email, client.email);
+
     const result = await sendInvoiceEmail(
       client.email,
       billToName,
       invoice.invoice_number,
       parseFloat(invoice.total_amount),
       dueDate,
-      pdfBuffer
+      pdfBuffer,
+      cc.length > 0 ? cc : undefined
     );
 
     if (result.success) {

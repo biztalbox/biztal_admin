@@ -43,3 +43,24 @@ export function formatDateTime(date: string | Date | null | undefined): string {
   }
 }
 
+/** Comma-separated secondary emails → unique list for CC; drops duplicates and the primary `to` address. */
+export function parseSecondaryEmailsForCc(
+  raw: string | null | undefined,
+  primaryEmail?: string | null
+): string[] {
+  if (!raw || !String(raw).trim()) return [];
+  const primary = primaryEmail?.trim().toLowerCase() || '';
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of String(raw).split(',')) {
+    const e = part.trim();
+    if (!e) continue;
+    const key = e.toLowerCase();
+    if (primary && key === primary) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(e);
+  }
+  return out;
+}
+

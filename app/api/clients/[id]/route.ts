@@ -36,6 +36,7 @@ async function handlePut(
     const {
       name,
       email,
+      secondary_email,
       phone,
       whatsapp,
       company,
@@ -76,11 +77,12 @@ async function handlePut(
     }
 
     await execute(
-      `UPDATE clients SET name = ?, email = ?, phone = ?, whatsapp = ?, company = ?, address = ?, city = ?, state = ?, zip_code = ?, country = ?, website = ?, gst_no = ?, contact_person = ?, remark = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+      `UPDATE clients SET name = ?, email = ?, secondary_email = ?, phone = ?, whatsapp = ?, company = ?, address = ?, city = ?, state = ?, zip_code = ?, country = ?, website = ?, gst_no = ?, contact_person = ?, remark = ?, status = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
         name,
         email,
+        secondary_email?.trim() || null,
         phone || null,
         whatsapp || null,
         company || null,

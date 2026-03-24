@@ -15,6 +15,7 @@ export interface EmailOptions {
   subject: string;
   html: string;
   text?: string;
+  cc?: string | string[];
   attachments?: Array<{
     filename: string;
     content: Buffer | string;
@@ -37,6 +38,10 @@ export async function sendEmail(options: EmailOptions): Promise<{ success: boole
 
     if (options.attachments) {
       mailOptions.attachments = options.attachments;
+    }
+
+    if (options.cc) {
+      mailOptions.cc = options.cc;
     }
 
     if (options.replyTo) {
@@ -178,7 +183,8 @@ export async function sendPaymentReminder(
   dueDate: string,
   daysOverdue?: number,
   inReplyTo?: string,
-  references?: string
+  references?: string,
+  cc?: string | string[]
 ): Promise<{ success: boolean; message?: string; error?: string; messageId?: string }> {
   const html = getPaymentReminderTemplate(clientName, invoiceNumber, amount, dueDate, daysOverdue);
   return sendEmail({
@@ -187,6 +193,7 @@ export async function sendPaymentReminder(
     html,
     inReplyTo,
     references,
+    cc,
   });
 }
 
@@ -196,7 +203,8 @@ export async function sendInvoiceEmail(
   invoiceNumber: string,
   amount: number,
   dueDate?: string,
-  pdfBuffer?: Buffer
+  pdfBuffer?: Buffer,
+  cc?: string | string[]
 ): Promise<{ success: boolean; message?: string; error?: string; messageId?: string }> {
   const html = getInvoiceEmailTemplate(clientName, invoiceNumber, amount, dueDate);
   const attachments = pdfBuffer ? [{
@@ -210,5 +218,6 @@ export async function sendInvoiceEmail(
     subject: `Invoice #${invoiceNumber} - ${process.env.SMTP_FROM_NAME || 'BIZTALBOX MARKETING & BUSINESS CONSULTING PVT. LTD.'}`,
     html,
     attachments,
+    cc,
   });
 }

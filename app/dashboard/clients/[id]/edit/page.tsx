@@ -17,6 +17,7 @@ export default function EditClientPage() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    secondary_email: '',
     phone: '',
     whatsapp: '',
     company: '',
@@ -46,7 +47,11 @@ export default function EditClientPage() {
       });
 
       if (response.data.success) {
-        setFormData(response.data.data);
+        const d = response.data.data;
+        setFormData({
+          ...d,
+          secondary_email: d.secondary_email ?? '',
+        });
       } else {
         toast.error('Failed to load client data');
         router.push('/dashboard/clients');
@@ -198,6 +203,24 @@ export default function EditClientPage() {
               required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+
+          <div className="md:col-span-2">
+            <label htmlFor="secondary_email" className="block text-sm font-medium text-gray-700 mb-2">
+              Secondary emails (CC)
+            </label>
+            <input
+              type="text"
+              id="secondary_email"
+              name="secondary_email"
+              value={formData.secondary_email}
+              onChange={handleChange}
+              placeholder="email1@example.com, email2@example.com"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Optional. These addresses are CC’d when sending invoices and payment reminders (comma-separated).
+            </p>
           </div>
 
           <div>

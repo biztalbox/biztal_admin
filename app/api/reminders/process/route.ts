@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendPaymentReminder as sendWhatsAppReminder } from '@/lib/whatsapp';
 import { sendPaymentReminder as sendEmailReminder } from '@/lib/email';
-import { generateId } from '@/lib/utils';
+import { generateId, parseSecondaryEmailsForCc } from '@/lib/utils';
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     
     // Get all unpaid invoices
     const invoices = await query(
-      `SELECT i.*, c.name as client_name, c.email as client_email, c.phone, c.whatsapp
+      `SELECT i.*, c.name as client_name, c.email as client_email, c.secondary_email as client_secondary_email, c.phone, c.whatsapp
        FROM invoices i
        INNER JOIN clients c ON i.client_id = c.id
        WHERE i.status != 'PAID' AND i.status != 'DRAFT'
@@ -114,13 +114,17 @@ export async function POST(req: NextRequest) {
           // Send Email
           if (email) {
             try {
+              const cc = parseSecondaryEmailsForCc(invoice.client_secondary_email, email);
               await sendEmailReminder(
                 email,
                 invoice.client_name,
                 invoice.invoice_number,
                 parseFloat(invoice.total_amount),
                 dueDate.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }),
-                daysOverdue
+                daysOverdue,
+                undefined,
+                undefined,
+                cc.length > 0 ? cc : undefined
               );
               
               // Log reminder history
