@@ -384,13 +384,13 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
   // ========== NOTES SECTION ==========
   if (invoice.notes) {
     doc.setFont('sans-serif', 'bold');
-    doc.setFontSize(10);
+    doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
     doc.text('Notes:', margin, yPos);
     
     yPos += 7;
-    doc.setFont('sans-serif', 'normal');
-    doc.setFontSize(9);
+    doc.setFont('sans-serif', 'bold');
+    doc.setFontSize(10);
     const notesLines = doc.splitTextToSize(invoice.notes, pageWidth - 2 * margin);
     doc.text(notesLines, margin, yPos);
     yPos += notesLines.length * 5;
