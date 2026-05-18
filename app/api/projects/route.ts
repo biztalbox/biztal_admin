@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/middleware';
-import { query, queryOne, execute } from '@/lib/db';
+import { query, queryOne, beginTransaction, commit, rollback } from '@/lib/db';
 import { generateId } from '@/lib/utils';
+import { fetchProjectServicesDetail, syncProjectServicesDeliverables } from '@/lib/project-services';
 
 async function handleGet(req: NextRequest, userId: string) {
   try {
@@ -54,27 +55,51 @@ async function handlePost(req: NextRequest, userId: string) {
     }
 
     const id = generateId();
-    await execute(
-      `INSERT INTO projects (id, client_id, name, description, status, start_date, end_date, budget, notes)
+    const conn = await beginTransaction();
+    try {
+      await conn.execute(
+        `INSERT INTO projects (id, client_id, name, description, status, start_date, end_date, budget, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        client_id,
-        name,
-        description || null,
-        status,
-        start_date || null,
-        end_date || null,
-        budget ? parseFloat(budget) : null,
-        notes || null,
-      ]
-    );
+        [
+          id,
+          client_id,
+          name,
+          description || null,
+          status,
+          start_date || null,
+          end_date || null,
+          budget ? parseFloat(budget) : null,
+          notes || null,
+        ]
+      );
+      await syncProjectServicesDeliverables(conn, id, body.services);
+      await commit(conn);
+    } catch (innerErr: any) {
+      await rollback(conn);
+      console.error('Create project transactional error:', innerErr);
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            typeof innerErr?.message === 'string'
+              ? innerErr.message
+              : 'Failed to create project',
+        },
+        { status: 400 }
+      );
+    }
 
     const project = await queryOne('SELECT * FROM projects WHERE id = ?', [id]);
+    let services_detail: unknown[] = [];
+    try {
+      services_detail = await fetchProjectServicesDetail(id);
+    } catch {
+      services_detail = [];
+    }
     return NextResponse.json({
       success: true,
       message: 'Project created successfully',
-      data: project,
+      data: project ? { ...project, services_detail } : null,
     });
   } catch (error: any) {
     console.error('Create project error:', error);

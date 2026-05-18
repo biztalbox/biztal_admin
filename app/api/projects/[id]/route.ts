@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/middleware';
-import { queryOne, execute } from '@/lib/db';
+import { queryOne, execute, beginTransaction, commit, rollback } from '@/lib/db';
+import { fetchProjectServicesDetail, syncProjectServicesDeliverables } from '@/lib/project-services';
 
 async function handleGet(
   req: NextRequest,
@@ -16,7 +17,16 @@ async function handleGet(
         { status: 404 }
       );
     }
-    return NextResponse.json({ success: true, data: project });
+    let services_detail: unknown[] = [];
+    try {
+      services_detail = await fetchProjectServicesDetail(params.id);
+    } catch {
+      services_detail = [];
+    }
+    return NextResponse.json({
+      success: true,
+      data: { ...project, services_detail },
+    });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to fetch project' },
@@ -58,26 +68,50 @@ async function handlePut(
       );
     }
 
-    await execute(
-      `UPDATE projects SET name = ?, description = ?, status = ?, start_date = ?, end_date = ?, budget = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+    const conn = await beginTransaction();
+    try {
+      await conn.execute(
+        `UPDATE projects SET name = ?, description = ?, status = ?, start_date = ?, end_date = ?, budget = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [
-        name,
-        description || null,
-        status || 'ACTIVE',
-        start_date || null,
-        end_date || null,
-        budget ? parseFloat(budget) : null,
-        notes || null,
-        params.id,
-      ]
-    );
+        [
+          name,
+          description || null,
+          status || 'ACTIVE',
+          start_date || null,
+          end_date || null,
+          budget ? parseFloat(budget) : null,
+          notes || null,
+          params.id,
+        ]
+      );
+      await syncProjectServicesDeliverables(conn, params.id, body.services);
+      await commit(conn);
+    } catch (innerErr: any) {
+      await rollback(conn);
+      console.error('Update project transactional error:', innerErr);
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            typeof innerErr?.message === 'string'
+              ? innerErr.message
+              : 'Failed to update project',
+        },
+        { status: 400 }
+      );
+    }
 
     const project = await queryOne('SELECT * FROM projects WHERE id = ?', [params.id]);
+    let services_detail: unknown[] = [];
+    try {
+      services_detail = params.id ? await fetchProjectServicesDetail(params.id) : [];
+    } catch {
+      services_detail = [];
+    }
     return NextResponse.json({
       success: true,
       message: 'Project updated successfully',
-      data: project,
+      data: { ...project, services_detail },
     });
   } catch (error: any) {
     console.error('Update project error:', error);

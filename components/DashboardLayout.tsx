@@ -10,8 +10,7 @@ import {
   LogOut,
   Menu,
   X,
-  FolderKanban,
-  FileText
+  Layers,
 } from 'lucide-react';
 
 interface User {
@@ -54,10 +53,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const menuItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/dashboard/clients', label: 'Clients', icon: Users },
+    { href: '/dashboard/services', label: 'Services', icon: Layers },
     { href: '/dashboard/employees', label: 'Employees', icon: UserCog },
   ];
 
-  const isActive = (href: string) => pathname === href;
+  const isActive = (href: string) => {
+    if (href === '/dashboard') return pathname === '/dashboard';
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">

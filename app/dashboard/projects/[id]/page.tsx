@@ -5,8 +5,9 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Edit, FolderKanban } from 'lucide-react';
+import { ArrowLeft, Edit, FolderKanban, Layers } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import type { ProjectServiceGroup } from '@/lib/project-services';
 
 export default function ProjectViewPage() {
   const router = useRouter();
@@ -74,6 +75,8 @@ export default function ProjectViewPage() {
       </div>
     );
   }
+
+  const servicesDetail = (project.services_detail || []) as ProjectServiceGroup[];
 
   return (
     <div className="space-y-6">
@@ -206,6 +209,60 @@ export default function ProjectViewPage() {
           </div>
         )}
       </div>
+
+      <div className="bg-white rounded-lg shadow-md border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <h2 className="text-xl font-bold text-gray-800 flex items-center">
+              <Layers className="mr-2 text-blue-600" size={24} />
+              Services &amp; deliverables
+            </h2>
+          </div>
+          <div className="p-6 space-y-8">
+            {servicesDetail.length === 0 ? (
+              <p className="text-gray-600 text-sm">
+                No services selected for this project yet. Use Edit to add services and counts.
+              </p>
+            ) : (
+              servicesDetail.map((svc) => (
+                <div key={svc.service_id} className="space-y-3">
+                  <h3 className="text-lg font-semibold text-gray-800 border-b border-gray-100 pb-2">
+                    {svc.service_name}
+                  </h3>
+                  {svc.lines.length === 0 ? (
+                    <p className="text-sm text-gray-500">
+                      Service included with no specific deliverable lines.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-lg border border-gray-200">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-gray-50 text-gray-600">
+                          <tr>
+                            <th className="text-left font-semibold px-4 py-2">Deliverable</th>
+                            <th className="text-left font-semibold px-4 py-2 w-28">Quantity</th>
+                            <th className="text-left font-semibold px-4 py-2">Remarks</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {svc.lines.map((line) => (
+                            <tr key={line.matrix_item_id} className="bg-white">
+                              <td className="px-4 py-2 text-gray-800">{line.label}</td>
+                              <td className="px-4 py-2 font-medium text-gray-900">{line.quantity}</td>
+                              <td className="px-4 py-2 text-gray-700">
+                                {line.remarks && line.remarks.trim() !== ''
+                                  ? line.remarks
+                                  : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
     </div>
   );
 }

@@ -6,13 +6,23 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Save } from 'lucide-react';
 import Link from 'next/link';
+import ProjectServicesForm, {
+  buildEmptyDraft,
+  draftToPayload,
+  validateServicesDraft,
+  type CatalogService,
+  type ServicesDraftState,
+} from '@/components/ProjectServicesForm';
 
 function CreateProjectForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const clientId = searchParams.get('client_id');
   const [loading, setLoading] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [clients, setClients] = useState<any[]>([]);
+  const [catalog, setCatalog] = useState<CatalogService[]>([]);
+  const [servicesDraft, setServicesDraft] = useState<ServicesDraftState>({});
   const [formData, setFormData] = useState({
     client_id: clientId || '',
     name: '',
@@ -29,6 +39,32 @@ function CreateProjectForm() {
       fetchClients();
     }
   }, [clientId]);
+
+  useEffect(() => {
+    const loadCatalog = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get('/api/services/catalog', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.data.success) {
+          const data = res.data.data as CatalogService[];
+          setCatalog(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        console.error('Fetch services catalog error:', error);
+      } finally {
+        setCatalogLoading(false);
+      }
+    };
+    loadCatalog();
+  }, []);
+
+  useEffect(() => {
+    if (catalog.length > 0) {
+      setServicesDraft(buildEmptyDraft(catalog));
+    }
+  }, [catalog]);
 
   const fetchClients = async () => {
     try {
@@ -59,10 +95,20 @@ function CreateProjectForm() {
       return;
     }
 
+    const msg = validateServicesDraft(catalog, servicesDraft);
+    if (msg) {
+      toast.error(msg);
+      return;
+    }
+
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post('/api/projects', formData, {
+      const payload = {
+        ...formData,
+        services: draftToPayload(catalog, servicesDraft),
+      };
+      const response = await axios.post('/api/projects', payload, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -223,6 +269,19 @@ function CreateProjectForm() {
               rows={3}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+
+          <div className="md:col-span-2 pt-2 border-t border-gray-100 mt-2">
+            <label className="block text-base font-semibold text-gray-800 mb-3">Services</label>
+            {catalogLoading ? (
+              <p className="text-sm text-gray-500">Loading services catalog…</p>
+            ) : (
+              <ProjectServicesForm
+                catalog={catalog}
+                value={servicesDraft}
+                onChange={setServicesDraft}
+              />
+            )}
           </div>
         </div>
 

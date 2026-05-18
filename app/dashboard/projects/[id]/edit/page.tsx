@@ -6,6 +6,14 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import Link from 'next/link';
+import type { ProjectServiceGroup } from '@/lib/project-services';
+import ProjectServicesForm, {
+  draftFromSaved,
+  draftToPayload,
+  validateServicesDraft,
+  type CatalogService,
+  type ServicesDraftState,
+} from '@/components/ProjectServicesForm';
 
 export default function EditProjectPage() {
   const router = useRouter();
@@ -14,7 +22,10 @@ export default function EditProjectPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [project, setProject] = useState<any>(null);
+  const [catalog, setCatalog] = useState<CatalogService[]>([]);
+  const [servicesDraft, setServicesDraft] = useState<ServicesDraftState>({});
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -26,11 +37,37 @@ export default function EditProjectPage() {
   });
 
   useEffect(() => {
+    const loadCatalog = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get('/api/services/catalog', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.data.success) {
+          const data = res.data.data as CatalogService[];
+          setCatalog(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        console.error('Fetch services catalog error:', error);
+      } finally {
+        setCatalogLoading(false);
+      }
+    };
+    loadCatalog();
+  }, []);
+
+  useEffect(() => {
     if (projectId) {
       fetchProject();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
+
+  useEffect(() => {
+    if (!project || catalog.length === 0) return;
+    const saved = (project.services_detail || []) as ProjectServiceGroup[];
+    setServicesDraft(draftFromSaved(catalog, saved));
+  }, [project, catalog]);
 
   const fetchProject = async () => {
     try {
@@ -81,10 +118,20 @@ export default function EditProjectPage() {
       return;
     }
 
+    const v = validateServicesDraft(catalog, servicesDraft);
+    if (v) {
+      toast.error(v);
+      return;
+    }
+
     setSaving(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.put(`/api/projects/${projectId}`, formData, {
+      const payload = {
+        ...formData,
+        services: draftToPayload(catalog, servicesDraft),
+      };
+      const response = await axios.put(`/api/projects/${projectId}`, payload, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -286,6 +333,19 @@ export default function EditProjectPage() {
               rows={3}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+
+          <div className="md:col-span-2 pt-2 border-t border-gray-100 mt-2">
+            <label className="block text-base font-semibold text-gray-800 mb-3">Services</label>
+            {catalogLoading ? (
+              <p className="text-sm text-gray-500">Loading services catalog…</p>
+            ) : (
+              <ProjectServicesForm
+                catalog={catalog}
+                value={servicesDraft}
+                onChange={setServicesDraft}
+              />
+            )}
           </div>
         </div>
 
