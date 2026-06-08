@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { Edit, Plus, History, Download, Bell, Eye, FolderKanban, FileText, X } from 'lucide-react';
+import { Edit, Plus, History, Download, Bell, Eye, FolderKanban, FileText, X, AlertTriangle } from 'lucide-react';
 import { formatDate, formatDateTime } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 
@@ -32,6 +32,7 @@ export default function ClientViewPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [sendingReminder, setSendingReminder] = useState<string | null>(null);
+  const [sendingOverdueReminder, setSendingOverdueReminder] = useState<string | null>(null);
   const [reminderHistory, setReminderHistory] = useState<any[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
   const [historyTab, setHistoryTab] = useState<'all' | 'email'>('all');
@@ -195,6 +196,30 @@ export default function ClientViewPage() {
       toast.error(error.response?.data?.error || 'Failed to send reminder');
     } finally {
       setSendingReminder(null);
+    }
+  };
+
+  const handleSendOverdueReminder = async (invoiceId: string) => {
+    if (!confirm('Send overdue payment reminder for this invoice?')) return;
+
+    setSendingOverdueReminder(invoiceId);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`/api/invoices/${invoiceId}/send-overdue-reminder`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.data.success) {
+        toast.success(response.data.message || 'Overdue reminder sent successfully!');
+        fetchData();
+      } else {
+        toast.error(response.data.error || 'Failed to send overdue reminder');
+      }
+    } catch (error: any) {
+      console.error('Send overdue reminder error:', error);
+      toast.error(error.response?.data?.error || 'Failed to send overdue reminder');
+    } finally {
+      setSendingOverdueReminder(null);
     }
   };
 
@@ -499,12 +524,24 @@ export default function ClientViewPage() {
                               onClick={() => handleSendReminder(invoice.id)}
                               disabled={sendingReminder === invoice.id}
                               className="p-1 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-lg hover:from-orange-700 hover:to-orange-800 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm hover:shadow-md"
-                              title="Send Reminder (Email & WhatsApp)"
+                              title="Send Payment Reminder"
                             >
                               {sendingReminder === invoice.id ? (
                                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                               ) : (
                                 <Bell size={14} />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleSendOverdueReminder(invoice.id)}
+                              disabled={sendingOverdueReminder === invoice.id || !client?.email}
+                              className="p-1 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm hover:shadow-md"
+                              title="Overdue Reminder"
+                            >
+                              {sendingOverdueReminder === invoice.id ? (
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <AlertTriangle size={14} />
                               )}
                             </button>
                             <button

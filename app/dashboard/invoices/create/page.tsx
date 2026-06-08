@@ -6,6 +6,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Save } from 'lucide-react';
 import Link from 'next/link';
+import { invoiceTotalsFromParts } from '@/lib/utils';
 
 function CreateInvoiceForm() {
   const router = useRouter();
@@ -21,6 +22,7 @@ function CreateInvoiceForm() {
     project_id: '',
     invoice_number: 'Generating…',
     amount: '',
+    tax_percent: '0',
     tax: '0',
     discount: '0',
     total_amount: '0',
@@ -98,13 +100,13 @@ function CreateInvoiceForm() {
     setFormData((prev) => {
       const updated = { ...prev, [name]: value };
       
-      // Calculate total amount
-      if (name === 'amount' || name === 'tax' || name === 'discount') {
+      if (name === 'amount' || name === 'tax_percent' || name === 'discount') {
         const amount = parseFloat(updated.amount || '0');
-        const tax = parseFloat(updated.tax || '0');
+        const taxPercent = parseFloat(updated.tax_percent || '0');
         const discount = parseFloat(updated.discount || '0');
-        const total = amount + tax - discount;
-        updated.total_amount = total.toFixed(2);
+        const totals = invoiceTotalsFromParts(amount, taxPercent, discount);
+        updated.tax = totals.tax;
+        updated.total_amount = totals.total_amount;
       }
       
       return updated;
@@ -342,19 +344,36 @@ function CreateInvoiceForm() {
           </div>
 
           <div>
+            <label htmlFor="tax_percent" className="block text-sm font-medium text-gray-700 mb-2">
+              Tax (%)
+            </label>
+            <input
+              type="number"
+              id="tax_percent"
+              name="tax_percent"
+              value={formData.tax_percent}
+              onChange={handleChange}
+              step="0.01"
+              min="0"
+              max="100"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="e.g. 18"
+            />
+          </div>
+
+          <div>
             <label htmlFor="tax" className="block text-sm font-medium text-gray-700 mb-2">
-              Tax
+              Tax amount
             </label>
             <input
               type="number"
               id="tax"
               name="tax"
               value={formData.tax}
-              onChange={handleChange}
-              step="0.01"
-              min="0"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              readOnly
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
             />
+            <p className="text-xs text-gray-500 mt-1">Auto-calculated from amount × tax %</p>
           </div>
 
           <div>

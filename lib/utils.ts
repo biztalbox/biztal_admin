@@ -16,6 +16,30 @@ export function formatCurrency(amount: number): string {
   return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+export function taxAmountFromPercent(amount: number, taxPercent: number): number {
+  if (!Number.isFinite(amount) || amount < 0) return 0;
+  if (!Number.isFinite(taxPercent) || taxPercent < 0) return 0;
+  return Math.round(amount * taxPercent * 0.01 * 100) / 100;
+}
+
+export function taxPercentFromAmountAndTax(amount: number, tax: number): string {
+  if (!Number.isFinite(amount) || amount <= 0) return '0';
+  if (!Number.isFinite(tax) || tax <= 0) return '0';
+  const pct = (tax / amount) * 100;
+  const rounded = Math.round(pct * 100) / 100;
+  return String(rounded);
+}
+
+export function invoiceTotalsFromParts(
+  amount: number,
+  taxPercent: number,
+  discount: number
+): { tax: string; total_amount: string } {
+  const tax = taxAmountFromPercent(amount, taxPercent);
+  const total = Math.round((amount + tax - discount) * 100) / 100;
+  return { tax: tax.toFixed(2), total_amount: total.toFixed(2) };
+}
+
 export function formatDate(date: string | Date | null | undefined): string {
   if (!date) return 'N/A';
   const d = typeof date === 'string' ? new Date(date) : date;

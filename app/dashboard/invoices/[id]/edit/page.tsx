@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Save, Download, Trash2, Mail, Bell, History, X, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Save, Download, Trash2, Mail, Bell, History, X, MessageCircle, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { downloadInvoicePDF } from '@/lib/pdf';
+import { invoiceTotalsFromParts, taxPercentFromAmountAndTax } from '@/lib/utils';
 
 export default function EditInvoicePage() {
   const router = useRouter();
@@ -19,6 +20,7 @@ export default function EditInvoicePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [sendingInvoice, setSendingInvoice] = useState(false);
   const [sendingReminder, setSendingReminder] = useState(false);
+  const [sendingOverdueReminder, setSendingOverdueReminder] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [emailHistory, setEmailHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -30,6 +32,7 @@ export default function EditInvoicePage() {
     project_id: '',
     invoice_number: '',
     amount: '',
+    tax_percent: '0',
     tax: '0',
     discount: '0',
     total_amount: '0',
@@ -59,10 +62,13 @@ export default function EditInvoicePage() {
       if (invoiceRes.data.success) {
         const inv = invoiceRes.data.data;
         setInvoice(inv);
+        const amountNum = parseFloat(inv.amount);
+        const taxNum = parseFloat(inv.tax || 0);
         setFormData({
           project_id: inv.project_id || '',
           invoice_number: inv.invoice_number,
           amount: inv.amount.toString(),
+          tax_percent: taxPercentFromAmountAndTax(amountNum, taxNum),
           tax: (inv.tax || 0).toString(),
           discount: (inv.discount || 0).toString(),
           total_amount: inv.total_amount.toString(),
@@ -128,12 +134,13 @@ export default function EditInvoicePage() {
     setFormData((prev) => {
       const updated = { ...prev, [name]: value };
       
-      if (name === 'amount' || name === 'tax' || name === 'discount') {
+      if (name === 'amount' || name === 'tax_percent' || name === 'discount') {
         const amount = parseFloat(updated.amount || '0');
-        const tax = parseFloat(updated.tax || '0');
+        const taxPercent = parseFloat(updated.tax_percent || '0');
         const discount = parseFloat(updated.discount || '0');
-        const total = amount + tax - discount;
-        updated.total_amount = total.toFixed(2);
+        const totals = invoiceTotalsFromParts(amount, taxPercent, discount);
+        updated.tax = totals.tax;
+        updated.total_amount = totals.total_amount;
       }
       
       return updated;
@@ -317,6 +324,41 @@ export default function EditInvoicePage() {
     }
   };
 
+  const handleSendOverdueReminder = async () => {
+    if (!invoice || !client) {
+      toast.error('Invoice or client data not available');
+      return;
+    }
+
+    if (!client.email) {
+      toast.error('Client email not found');
+      return;
+    }
+
+    if (!confirm('Send overdue payment reminder for this invoice?')) return;
+
+    setSendingOverdueReminder(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`/api/invoices/${invoiceId}/send-overdue-reminder`, {}, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.data.success) {
+        toast.success('Overdue reminder sent successfully!');
+      } else {
+        toast.error(response.data.error || 'Failed to send overdue reminder');
+      }
+    } catch (error: any) {
+      console.error('Send overdue reminder error:', error);
+      toast.error(error.response?.data?.error || 'Failed to send overdue reminder. Please try again.');
+    } finally {
+      setSendingOverdueReminder(false);
+    }
+  };
+
   const fetchEmailHistory = async () => {
     if (!invoiceId) return;
     
@@ -482,6 +524,23 @@ Thank you and looking forward to continuing our collaboration.`;
               <>
                 <Bell size={18} />
                 <span>Remind</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleSendOverdueReminder}
+            disabled={sendingOverdueReminder || !client?.email}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition"
+          >
+            {sendingOverdueReminder ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>...</span>
+              </>
+            ) : (
+              <>
+                <AlertTriangle size={18} />
+                <span>Overdue Reminder</span>
               </>
             )}
           </button>
@@ -757,19 +816,36 @@ Thank you and looking forward to continuing our collaboration.`;
           </div>
 
           <div>
+            <label htmlFor="tax_percent" className="block text-sm font-medium text-gray-700 mb-2">
+              Tax (%)
+            </label>
+            <input
+              type="number"
+              id="tax_percent"
+              name="tax_percent"
+              value={formData.tax_percent}
+              onChange={handleChange}
+              step="0.01"
+              min="0"
+              max="100"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="e.g. 18"
+            />
+          </div>
+
+          <div>
             <label htmlFor="tax" className="block text-sm font-medium text-gray-700 mb-2">
-              Tax
+              Tax amount
             </label>
             <input
               type="number"
               id="tax"
               name="tax"
               value={formData.tax}
-              onChange={handleChange}
-              step="0.01"
-              min="0"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              readOnly
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
             />
+            <p className="text-xs text-gray-500 mt-1">Auto-calculated from amount × tax %</p>
           </div>
 
           <div>
