@@ -225,6 +225,13 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
     doc.text(dueDate, rightColumnX + 30, yPos);
   }
 
+  yPos += 6;
+  doc.setFont('sans-serif', 'bold');
+  doc.setFontSize(10);
+  doc.text('HSN:', rightColumnX, yPos);
+  doc.setFont('sans-serif', 'normal');
+  doc.text('998361, 998362, 998313 998314, 9984', rightColumnX + 30, yPos);
+
   // ========== MAIN CONTENT TABLE ==========
   yPos = Math.max(yPos, margin + 100) + 15;
   
@@ -361,7 +368,7 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
   if (invoice.tax > 0) {
     doc.setFont('sans-serif', 'normal');
     doc.setFontSize(10);
-    doc.text('Tax:', summaryX, yPos);
+    doc.text('9% SGST + 9% CGST', summaryX, yPos);
     doc.setFont('arial', 'normal'); // Use arial for numbers
     doc.text(`${invoice.tax.toFixed(2)}`, margin + colWidth * 1.5, yPos, { align: 'right' });
     doc.setFont('sans-serif', 'normal'); // Reset to default font
