@@ -50,8 +50,8 @@ interface InvoiceData {
 
 const COMPANY_DETAILS = {
   name: 'BIZTALBOX MARKETING & BUSINESS CONSULTING PVT. LTD.',
-  address: 'IST FLOOR, KHASRA NO.9/22, LIBASPUR, Shiv Mandir Road,',
-  city: 'Swaroop Nagar, North West Delhi-110042',
+  address: 'A-203, NPSC, CGHS LTD. Plot No.-5,',
+  city: 'Sector-2, Dwarka, New Delhi - 110075',
   gstin: '07AANCB1128J1ZO',
   state: 'Delhi, Code : 07',
   contact: '+91 9485699709',
