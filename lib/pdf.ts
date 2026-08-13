@@ -279,8 +279,10 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
   doc.setFont('sans-serif', 'bold');
   doc.setFontSize(10);
   const colWidth = (pageWidth - 2 * margin) / 2;
-  doc.text('DESCRIPTION', margin + colWidth * 0.5, yPos + 8, { align: 'center' });
-  doc.text(`AMOUNT (${currencyCode})`, margin + colWidth * 1.5, yPos + 8, { align: 'center' });
+  const descColX = margin + 5;
+  const amountColRight = margin + colWidth * 1.5;
+  doc.text('DESCRIPTION', descColX, yPos + 8);
+  doc.text(`AMOUNT (${currencyCode})`, amountColRight, yPos + 8, { align: 'right' });
 
   yPos += tableHeaderHeight;
 
@@ -308,15 +310,15 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
       
       // Project name in description column
       const projectNameLines = doc.splitTextToSize(project.name, colWidth - 5);
-      doc.text(projectNameLines, margin + 5, yPos + 6);
+      doc.text(projectNameLines, descColX, yPos + 6);
       
       // Budget in amount column
       const budgetValue = parseFloat(project.budget.toString()) || 0;
       doc.setFont('arial', 'normal'); // Use arial for numbers
       if (budgetValue >= 1) {
-        doc.text(`${budgetValue.toFixed(2)}`, margin + colWidth * 1.5, yPos + 6, { align: 'right' });
+        doc.text(`${budgetValue.toFixed(2)}`, amountColRight, yPos + 6, { align: 'right' });
       } else {
-        doc.text('-', margin + colWidth * 1.5, yPos + 6, { align: 'right' });
+        doc.text('-', amountColRight, yPos + 6, { align: 'right' });
       }
       doc.setFont('sans-serif', 'normal'); // Reset to default font
       
@@ -338,11 +340,11 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
       }
       
       const descLines = doc.splitTextToSize(item.description, colWidth - 5);
-      doc.text(descLines, margin + 5, yPos + 6);
+      doc.text(descLines, descColX, yPos + 6);
       
       // Right-aligned numbers - use arial font for better number readability
       doc.setFont('arial', 'normal');
-      doc.text(`${item.amount.toFixed(2)}`, margin + colWidth * 1.5, yPos + 6, { align: 'right' });
+      doc.text(`${item.amount.toFixed(2)}`, amountColRight, yPos + 6, { align: 'right' });
       doc.setFont('sans-serif', 'normal'); // Reset to default font
       
       yPos += Math.max(10, descLines.length * 6);
@@ -357,21 +359,21 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
     if (invoice.project && invoice.project.name) {
       // Use project name
       const projectNameLines = doc.splitTextToSize(invoice.project.name, colWidth - 5);
-      doc.text(projectNameLines, margin + 5, yPos + 6);
+      doc.text(projectNameLines, descColX, yPos + 6);
       
       const budgetValue = parseFloat(invoice.project.budget.toString()) || 0;
       doc.setFont('arial', 'normal'); // Use arial for numbers
       if (budgetValue >= 1) {
-        doc.text(`${budgetValue.toFixed(2)}`, margin + colWidth * 1.5, yPos + 6, { align: 'right' });
+        doc.text(`${budgetValue.toFixed(2)}`, amountColRight, yPos + 6, { align: 'right' });
       } else {
-        doc.text('-', margin + colWidth * 1.5, yPos + 6, { align: 'right' });
+        doc.text('-', amountColRight, yPos + 6, { align: 'right' });
       }
       doc.setFont('sans-serif', 'normal'); // Reset to default font
     } else {
       // Fallback to Service/Product
-      doc.text('Service/Product', margin + 5, yPos + 6);
+      doc.text('Service/Product', descColX, yPos + 6);
       doc.setFont('arial', 'normal'); // Use arial for numbers
-      doc.text(`${invoice.amount.toFixed(2)}`, margin + colWidth * 1.5, yPos + 6, { align: 'right' });
+      doc.text(`${invoice.amount.toFixed(2)}`, amountColRight, yPos + 6, { align: 'right' });
       doc.setFont('sans-serif', 'normal'); // Reset to default font
     }
     yPos += 12;
@@ -380,22 +382,20 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
   yPos += 10;
 
   // ========== SUMMARY SECTION ==========
-  const summaryX = margin + colWidth * 0.5;
-  const summaryWidth = colWidth * 1.5;
   
   if (invoice.discount > 0) {
     doc.setFont('sans-serif', 'normal');
     doc.setFontSize(10);
-    doc.text('Subtotal:', summaryX, yPos);
+    doc.text('Subtotal:', descColX, yPos);
     doc.setFont('arial', 'normal'); // Use arial for numbers
-    doc.text(`${invoice.amount.toFixed(2)}`, margin + colWidth * 1.5, yPos, { align: 'right' });
+    doc.text(`${invoice.amount.toFixed(2)}`, amountColRight, yPos, { align: 'right' });
     doc.setFont('sans-serif', 'normal'); // Reset to default font
     yPos += 8;
     
     doc.setFont('sans-serif', 'normal');
-    doc.text('Discount:', summaryX, yPos);
+    doc.text('Discount:', descColX, yPos);
     doc.setFont('arial', 'normal'); // Use arial for numbers
-    doc.text(`-${invoice.discount.toFixed(2)}`, margin + colWidth * 1.5, yPos, { align: 'right' });
+    doc.text(`-${invoice.discount.toFixed(2)}`, amountColRight, yPos, { align: 'right' });
     doc.setFont('sans-serif', 'normal'); // Reset to default font
     yPos += 8;
   }
@@ -411,23 +411,23 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
     const cgstAmt = invoice.cgst_amount ?? 0;
 
     if (gstMode === 'INTER' && sgstIgstAmt > 0) {
-      doc.text(`${sgstIgstPct}% IGST`, summaryX, yPos);
+      doc.text(`${sgstIgstPct}% IGST`, descColX, yPos);
       doc.setFont('arial', 'normal');
-      doc.text(`${sgstIgstAmt.toFixed(2)}`, margin + colWidth * 1.5, yPos, { align: 'right' });
+      doc.text(`${sgstIgstAmt.toFixed(2)}`, amountColRight, yPos, { align: 'right' });
       doc.setFont('sans-serif', 'normal');
       yPos += 8;
     } else {
       if (sgstIgstAmt > 0) {
-        doc.text(`${sgstIgstPct}% SGST`, summaryX, yPos);
+        doc.text(`${sgstIgstPct}% SGST`, descColX, yPos);
         doc.setFont('arial', 'normal');
-        doc.text(`${sgstIgstAmt.toFixed(2)}`, margin + colWidth * 1.5, yPos, { align: 'right' });
+        doc.text(`${sgstIgstAmt.toFixed(2)}`, amountColRight, yPos, { align: 'right' });
         doc.setFont('sans-serif', 'normal');
         yPos += 8;
       }
       if (cgstAmt > 0) {
-        doc.text(`${cgstPct}% CGST`, summaryX, yPos);
+        doc.text(`${cgstPct}% CGST`, descColX, yPos);
         doc.setFont('arial', 'normal');
-        doc.text(`${cgstAmt.toFixed(2)}`, margin + colWidth * 1.5, yPos, { align: 'right' });
+        doc.text(`${cgstAmt.toFixed(2)}`, amountColRight, yPos, { align: 'right' });
         doc.setFont('sans-serif', 'normal');
         yPos += 8;
       }
@@ -440,9 +440,9 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
   
   doc.setFont('sans-serif', 'bold');
   doc.setFontSize(11);
-  doc.text('Total Amount:', summaryX, yPos + 5);
+  doc.text('Total Amount:', descColX, yPos + 5);
   doc.setFont('arial', 'bold'); // Use arial for numbers
-  doc.text(`${invoice.total_amount.toFixed(2)}`, margin + colWidth * 1.5, yPos + 5, { align: 'right' });
+  doc.text(`${invoice.total_amount.toFixed(2)}`, amountColRight, yPos + 5, { align: 'right' });
   doc.setFont('sans-serif', 'normal'); // Reset to default font
 
   yPos += 20;

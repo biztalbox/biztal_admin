@@ -67,7 +67,7 @@ async function handlePut(
       amount,
       discount,
       gst_mode,
-      sgst_igst_percent: sgst_igst_percent ?? 9,
+      sgst_igst_percent: sgst_igst_percent ?? (String(gst_mode || '').toUpperCase() === 'INTER' ? 18 : 9),
       cgst_percent: cgst_percent ?? 9,
     });
 

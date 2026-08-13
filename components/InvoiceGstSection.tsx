@@ -38,7 +38,7 @@ export default function InvoiceGstSection({
 
   const setMode = (mode: GstMode) => {
     if (mode === 'INTER') {
-      onChange({ gst_mode: 'INTER', cgst_percent: '0' });
+      onChange({ gst_mode: 'INTER', cgst_percent: '0', sgst_igst_percent: '18' });
     } else {
       onChange({
         gst_mode: 'INTRA',
@@ -50,7 +50,7 @@ export default function InvoiceGstSection({
       amount,
       discount,
       gst_mode: mode,
-      sgst_igst_percent: value.sgst_igst_percent,
+      sgst_igst_percent: mode === 'INTER' ? '18' : value.sgst_igst_percent,
       cgst_percent: mode === 'INTRA' ? value.cgst_percent || '9' : '0',
     });
     onTotalsChange({
