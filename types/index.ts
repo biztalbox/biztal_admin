@@ -77,6 +77,9 @@ export interface Invoice {
   issued_date?: string;
   paid_date?: string;
   notes?: string;
+  po_no?: string;
+  po_date?: string;
+  signature_image?: string;
   items?: any;
   reminder_sent_at?: string;
   last_reminder_sent_at?: string;

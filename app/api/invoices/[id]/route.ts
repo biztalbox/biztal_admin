@@ -49,6 +49,9 @@ async function handlePut(
       items,
       currency = 'INR',
       currency_symbol = '₹',
+      po_no,
+      po_date,
+      signature_image,
     } = body;
 
     if (!invoice_number || amount === undefined || total_amount === undefined) {
@@ -83,7 +86,7 @@ async function handlePut(
     // Try to update with project_ids first
     try {
       await execute(
-        `UPDATE invoices SET project_id = ?, project_ids = ?, invoice_number = ?, amount = ?, tax = ?, discount = ?, total_amount = ?, status = ?, due_date = ?, issued_date = ?, paid_date = ?, notes = ?, items = ?, currency = ?, currency_symbol = ?, updated_at = CURRENT_TIMESTAMP
+        `UPDATE invoices SET project_id = ?, project_ids = ?, invoice_number = ?, amount = ?, tax = ?, discount = ?, total_amount = ?, status = ?, due_date = ?, issued_date = ?, paid_date = ?, notes = ?, po_no = ?, po_date = ?, signature_image = ?, items = ?, currency = ?, currency_symbol = ?, updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
           project_id || null,
@@ -98,6 +101,9 @@ async function handlePut(
           issued_date || null,
           paid_date || null,
           notes || null,
+          po_no?.trim() || null,
+          po_date || null,
+          signature_image || null,
           items ? JSON.stringify(items) : null,
           currency || 'INR',
           currency_symbol || '₹',

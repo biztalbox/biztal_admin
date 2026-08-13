@@ -88,3 +88,20 @@ export function parseSecondaryEmailsForCc(
   return out;
 }
 
+export function readImageFileAsDataUrl(file: File, maxBytes = 512000): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('Please upload a PNG or JPEG image'));
+      return;
+    }
+    if (file.size > maxBytes) {
+      reject(new Error('Image must be smaller than 500 KB'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('Failed to read image file'));
+    reader.readAsDataURL(file);
+  });
+}
+

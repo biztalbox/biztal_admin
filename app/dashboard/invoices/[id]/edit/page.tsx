@@ -8,6 +8,7 @@ import { ArrowLeft, Save, Download, Trash2, Mail, Bell, History, X, MessageCircl
 import Link from 'next/link';
 import { downloadInvoicePDF } from '@/lib/pdf';
 import { invoiceTotalsFromParts, taxPercentFromAmountAndTax } from '@/lib/utils';
+import InvoicePdfExtras from '@/components/InvoicePdfExtras';
 
 export default function EditInvoicePage() {
   const router = useRouter();
@@ -41,6 +42,9 @@ export default function EditInvoicePage() {
     issued_date: '',
     paid_date: '',
     notes: '',
+    po_no: '',
+    po_date: '',
+    signature_image: '',
     currency: 'INR',
     currency_symbol: '₹',
   });
@@ -77,6 +81,9 @@ export default function EditInvoicePage() {
           issued_date: inv.issued_date || '',
           paid_date: inv.paid_date || '',
           notes: inv.notes || '',
+          po_no: inv.po_no || '',
+          po_date: inv.po_date || '',
+          signature_image: inv.signature_image || '',
           currency: inv.currency || 'INR',
           currency_symbol: inv.currency_symbol || '₹',
         });
@@ -214,6 +221,9 @@ export default function EditInvoicePage() {
         discount: parseFloat(invoice.discount || 0),
         total_amount: parseFloat(invoice.total_amount),
         notes: invoice.notes,
+        po_no: invoice.po_no || undefined,
+        po_date: invoice.po_date || undefined,
+        signature_image: invoice.signature_image || undefined,
         currency: invoice.currency || 'INR',
         currency_symbol: invoice.currency_symbol || '₹',
       };
@@ -952,6 +962,13 @@ Thank you and looking forward to continuing our collaboration.`;
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+
+          <InvoicePdfExtras
+            po_no={formData.po_no}
+            po_date={formData.po_date}
+            signature_image={formData.signature_image}
+            onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
+          />
         </div>
 
         <div className="flex items-center justify-end space-x-4 pt-4 border-t border-gray-200">

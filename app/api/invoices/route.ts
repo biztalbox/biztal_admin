@@ -2,48 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/middleware';
 import { query, queryOne, beginTransaction, commit, rollback } from '@/lib/db';
 import { generateId } from '@/lib/utils';
-
-function getInvoicePrefix(now = new Date()): string {
-  // M = first capital letter of current month (J, F, M, etc.)
-  const monthLetter = now
-    .toLocaleString('en-US', { month: 'short' })
-    .charAt(0)
-    .toUpperCase();
-
-  // D = current date (01, 02, 27, etc.)
-  const day = String(now.getDate()).padStart(2, '0');
-
-  // Y = last two digit of current year (25, 26, etc.)
-  const year2 = String(now.getFullYear()).slice(-2);
-
-  return `BINV${monthLetter}${day}${year2}`;
-}
-
-async function getNextInvoiceNumberInTx(
-  connection: Awaited<ReturnType<typeof beginTransaction>>,
-  prefix: string
-): Promise<string> {
-  const like = `${prefix}%`;
-
-  // Use a transaction + FOR UPDATE to reduce race conditions for sequential numbers.
-  const [rows] = await connection.execute(
-    'SELECT invoice_number FROM invoices WHERE invoice_number LIKE ? ORDER BY invoice_number DESC LIMIT 1 FOR UPDATE',
-    [like]
-  );
-
-  const last = Array.isArray(rows) && rows.length > 0 ? (rows as any[])[0]?.invoice_number : null;
-  let nextSeq = 1;
-
-  if (typeof last === 'string') {
-    const match = last.match(new RegExp(`^${prefix}(\\d{4})$`));
-    if (match?.[1]) {
-      const n = parseInt(match[1], 10);
-      if (!Number.isNaN(n)) nextSeq = n + 1;
-    }
-  }
-
-  return `${prefix}${String(nextSeq).padStart(4, '0')}`;
-}
+import { getInvoicePrefix, getNextInvoiceNumberInTx } from '@/lib/invoice-number';
 
 async function handleGet(req: NextRequest, userId: string) {
   try {
@@ -107,6 +66,9 @@ async function handlePost(req: NextRequest, userId: string) {
       items,
       currency = 'INR',
       currency_symbol = '₹',
+      po_no,
+      po_date,
+      signature_image,
     } = body;
 
     if (!client_id || amount === undefined || total_amount === undefined) {
@@ -130,8 +92,8 @@ async function handlePost(req: NextRequest, userId: string) {
         // Try to insert with project_ids first
         try {
           await connection.execute(
-            `INSERT INTO invoices (id, client_id, project_id, project_ids, invoice_number, amount, tax, discount, total_amount, status, due_date, issued_date, notes, items, currency, currency_symbol)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO invoices (id, client_id, project_id, project_ids, invoice_number, amount, tax, discount, total_amount, status, due_date, issued_date, notes, po_no, po_date, signature_image, items, currency, currency_symbol)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               id,
               client_id,
@@ -146,6 +108,9 @@ async function handlePost(req: NextRequest, userId: string) {
               due_date || null,
               issued_date || null,
               notes || null,
+              po_no?.trim() || null,
+              po_date || null,
+              signature_image || null,
               items ? JSON.stringify(items) : null,
               currency || 'INR',
               currency_symbol || '₹',

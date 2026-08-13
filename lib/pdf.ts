@@ -13,6 +13,9 @@ interface InvoiceData {
   invoice_number: string;
   issued_date?: string;
   due_date?: string;
+  po_no?: string;
+  po_date?: string;
+  signature_image?: string;
   client: {
     name: string;
     company?: string;
@@ -46,6 +49,12 @@ interface InvoiceData {
   notes?: string;
   currency?: string;
   currency_symbol?: string;
+}
+
+export type { InvoiceData };
+
+function imageFormatFromDataUrl(dataUrl: string): 'PNG' | 'JPEG' {
+  return dataUrl.includes('image/png') ? 'PNG' : 'JPEG';
 }
 
 const COMPANY_DETAILS = {
@@ -232,6 +241,27 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
   doc.setFont('sans-serif', 'normal');
   doc.text('998361, 998362, 998313 998314, 9984', rightColumnX + 30, yPos);
 
+  if (invoice.po_no && invoice.po_no.trim()) {
+    yPos += 6;
+    doc.setFont('sans-serif', 'bold');
+    doc.text('P.O. No.:', rightColumnX, yPos);
+    doc.setFont('sans-serif', 'normal');
+    doc.text(invoice.po_no.trim(), rightColumnX + 30, yPos);
+  }
+
+  if (invoice.po_date) {
+    yPos += 6;
+    doc.setFont('sans-serif', 'bold');
+    doc.text('P.O. Date:', rightColumnX, yPos);
+    doc.setFont('sans-serif', 'normal');
+    const poDate = new Date(invoice.po_date).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+    doc.text(poDate, rightColumnX + 30, yPos);
+  }
+
   // ========== MAIN CONTENT TABLE ==========
   yPos = Math.max(yPos, margin + 100) + 15;
   
@@ -404,6 +434,25 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
   }
 
   // ========== FOOTER SECTION ==========
+  if (invoice.signature_image) {
+    try {
+      const sigWidth = 42;
+      const sigHeight = 18;
+      const sigX = pageWidth - margin - sigWidth;
+      const sigY = pageHeight - 38;
+      doc.addImage(
+        invoice.signature_image,
+        imageFormatFromDataUrl(invoice.signature_image),
+        sigX,
+        sigY,
+        sigWidth,
+        sigHeight
+      );
+    } catch (error) {
+      console.error('Error adding signature image:', error);
+    }
+  }
+
   yPos = pageHeight - 20;
   
   // Dark teal/green separator line

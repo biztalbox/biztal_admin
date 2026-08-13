@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { ArrowLeft, Save } from 'lucide-react';
 import Link from 'next/link';
 import { invoiceTotalsFromParts } from '@/lib/utils';
+import InvoicePdfExtras from '@/components/InvoicePdfExtras';
 
 function CreateInvoiceForm() {
   const router = useRouter();
@@ -30,6 +31,9 @@ function CreateInvoiceForm() {
     due_date: '',
     issued_date: new Date().toISOString().split('T')[0],
     notes: '',
+    po_no: '',
+    po_date: '',
+    signature_image: '',
     currency: 'INR',
     currency_symbol: '₹',
   });
@@ -305,7 +309,7 @@ function CreateInvoiceForm() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <p className="text-xs text-gray-500 mt-1">
-              {invoiceNumberLoading ? 'Generating invoice number…' : 'Auto-generated (BINV{M}{D}{Y}####)'}
+              {invoiceNumberLoading ? 'Generating invoice number…' : 'Auto-generated (BINV + Mon + DD + YY + ####)'}
             </p>
           </div>
 
@@ -447,6 +451,13 @@ function CreateInvoiceForm() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+
+          <InvoicePdfExtras
+            po_no={formData.po_no}
+            po_date={formData.po_date}
+            signature_image={formData.signature_image}
+            onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
+          />
         </div>
 
         <div className="flex items-center justify-end space-x-4 pt-4 border-t border-gray-200">
