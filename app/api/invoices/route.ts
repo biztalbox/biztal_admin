@@ -3,6 +3,7 @@ import { withAuth } from '@/lib/middleware';
 import { query, queryOne, beginTransaction, commit, rollback } from '@/lib/db';
 import { generateId } from '@/lib/utils';
 import { getInvoicePrefix, getNextInvoiceNumberInTx } from '@/lib/invoice-number';
+import { computeInvoiceGstTotals } from '@/lib/invoice-gst';
 
 async function handleGet(req: NextRequest, userId: string) {
   try {
@@ -56,9 +57,7 @@ async function handlePost(req: NextRequest, userId: string) {
       project_id,
       project_ids,
       amount,
-      tax = 0,
       discount = 0,
-      total_amount,
       status = 'DRAFT',
       due_date,
       issued_date,
@@ -69,14 +68,25 @@ async function handlePost(req: NextRequest, userId: string) {
       po_no,
       po_date,
       signature_image,
+      gst_mode,
+      sgst_igst_percent,
+      cgst_percent,
     } = body;
 
-    if (!client_id || amount === undefined || total_amount === undefined) {
+    if (!client_id || amount === undefined) {
       return NextResponse.json(
-        { success: false, error: 'Client ID, amount, and total amount are required' },
+        { success: false, error: 'Client ID and amount are required' },
         { status: 400 }
       );
     }
+
+    const gst = computeInvoiceGstTotals({
+      amount,
+      discount,
+      gst_mode,
+      sgst_igst_percent: sgst_igst_percent ?? 9,
+      cgst_percent: cgst_percent ?? 9,
+    });
 
     const id = generateId();
     // Store project_ids as JSON string if provided
@@ -92,8 +102,8 @@ async function handlePost(req: NextRequest, userId: string) {
         // Try to insert with project_ids first
         try {
           await connection.execute(
-            `INSERT INTO invoices (id, client_id, project_id, project_ids, invoice_number, amount, tax, discount, total_amount, status, due_date, issued_date, notes, po_no, po_date, signature_image, items, currency, currency_symbol)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO invoices (id, client_id, project_id, project_ids, invoice_number, amount, tax, gst_mode, sgst_igst_percent, cgst_percent, sgst_igst_amount, cgst_amount, discount, total_amount, status, due_date, issued_date, notes, po_no, po_date, signature_image, items, currency, currency_symbol)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               id,
               client_id,
@@ -101,9 +111,14 @@ async function handlePost(req: NextRequest, userId: string) {
               projectIdsJson,
               invoiceNo,
               parseFloat(amount),
-              parseFloat(tax || 0),
+              gst.tax,
+              gst.gst_mode,
+              gst.sgst_igst_percent,
+              gst.cgst_percent,
+              gst.sgst_igst_amount,
+              gst.cgst_amount,
               parseFloat(discount || 0),
-              parseFloat(total_amount),
+              gst.total_amount,
               status,
               due_date || null,
               issued_date || null,
@@ -130,9 +145,9 @@ async function handlePost(req: NextRequest, userId: string) {
                   project_id || null,
                   invoiceNo,
                   parseFloat(amount),
-                  parseFloat(tax || 0),
+                  gst.tax,
                   parseFloat(discount || 0),
-                  parseFloat(total_amount),
+                  gst.total_amount,
                   status,
                   due_date || null,
                   issued_date || null,
@@ -154,9 +169,9 @@ async function handlePost(req: NextRequest, userId: string) {
                     project_id || null,
                     invoiceNo,
                     parseFloat(amount),
-                    parseFloat(tax || 0),
+                    gst.tax,
                     parseFloat(discount || 0),
-                    parseFloat(total_amount),
+                    gst.total_amount,
                     status,
                     due_date || null,
                     issued_date || null,
@@ -180,9 +195,9 @@ async function handlePost(req: NextRequest, userId: string) {
                 projectIdsJson,
                 invoiceNo,
                 parseFloat(amount),
-                parseFloat(tax || 0),
+                gst.tax,
                 parseFloat(discount || 0),
-                parseFloat(total_amount),
+                gst.total_amount,
                 status,
                 due_date || null,
                 issued_date || null,

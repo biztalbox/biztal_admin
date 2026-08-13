@@ -80,6 +80,11 @@ export interface Invoice {
   po_no?: string;
   po_date?: string;
   signature_image?: string;
+  gst_mode?: 'INTRA' | 'INTER';
+  sgst_igst_percent?: number;
+  cgst_percent?: number;
+  sgst_igst_amount?: number;
+  cgst_amount?: number;
   items?: any;
   reminder_sent_at?: string;
   last_reminder_sent_at?: string;

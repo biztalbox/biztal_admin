@@ -44,6 +44,11 @@ interface InvoiceData {
   }>;
   amount: number;
   tax: number;
+  gst_mode?: 'INTRA' | 'INTER';
+  sgst_igst_percent?: number;
+  cgst_percent?: number;
+  sgst_igst_amount?: number;
+  cgst_amount?: number;
   discount: number;
   total_amount: number;
   notes?: string;
@@ -398,11 +403,35 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
   if (invoice.tax > 0) {
     doc.setFont('sans-serif', 'normal');
     doc.setFontSize(10);
-    doc.text('9% SGST + 9% CGST', summaryX, yPos);
-    doc.setFont('arial', 'normal'); // Use arial for numbers
-    doc.text(`${invoice.tax.toFixed(2)}`, margin + colWidth * 1.5, yPos, { align: 'right' });
-    doc.setFont('sans-serif', 'normal'); // Reset to default font
-    yPos += 8;
+
+    const gstMode = invoice.gst_mode === 'INTER' ? 'INTER' : 'INTRA';
+    const sgstIgstPct = invoice.sgst_igst_percent ?? 0;
+    const cgstPct = invoice.cgst_percent ?? 0;
+    const sgstIgstAmt = invoice.sgst_igst_amount ?? 0;
+    const cgstAmt = invoice.cgst_amount ?? 0;
+
+    if (gstMode === 'INTER' && sgstIgstAmt > 0) {
+      doc.text(`${sgstIgstPct}% IGST`, summaryX, yPos);
+      doc.setFont('arial', 'normal');
+      doc.text(`${sgstIgstAmt.toFixed(2)}`, margin + colWidth * 1.5, yPos, { align: 'right' });
+      doc.setFont('sans-serif', 'normal');
+      yPos += 8;
+    } else {
+      if (sgstIgstAmt > 0) {
+        doc.text(`${sgstIgstPct}% SGST`, summaryX, yPos);
+        doc.setFont('arial', 'normal');
+        doc.text(`${sgstIgstAmt.toFixed(2)}`, margin + colWidth * 1.5, yPos, { align: 'right' });
+        doc.setFont('sans-serif', 'normal');
+        yPos += 8;
+      }
+      if (cgstAmt > 0) {
+        doc.text(`${cgstPct}% CGST`, summaryX, yPos);
+        doc.setFont('arial', 'normal');
+        doc.text(`${cgstAmt.toFixed(2)}`, margin + colWidth * 1.5, yPos, { align: 'right' });
+        doc.setFont('sans-serif', 'normal');
+        yPos += 8;
+      }
+    }
   }
 
   // Total Amount with light gray background

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/middleware';
 import { queryOne, execute } from '@/lib/db';
+import { computeInvoiceGstTotals } from '@/lib/invoice-gst';
 
 async function handleGet(
   req: NextRequest,
@@ -38,9 +39,7 @@ async function handlePut(
       project_ids,
       invoice_number,
       amount,
-      tax = 0,
       discount = 0,
-      total_amount,
       status,
       due_date,
       issued_date,
@@ -52,14 +51,25 @@ async function handlePut(
       po_no,
       po_date,
       signature_image,
+      gst_mode,
+      sgst_igst_percent,
+      cgst_percent,
     } = body;
 
-    if (!invoice_number || amount === undefined || total_amount === undefined) {
+    if (!invoice_number || amount === undefined) {
       return NextResponse.json(
-        { success: false, error: 'Invoice number, amount, and total amount are required' },
+        { success: false, error: 'Invoice number and amount are required' },
         { status: 400 }
       );
     }
+
+    const gst = computeInvoiceGstTotals({
+      amount,
+      discount,
+      gst_mode,
+      sgst_igst_percent: sgst_igst_percent ?? 9,
+      cgst_percent: cgst_percent ?? 9,
+    });
 
     const existing = await queryOne('SELECT id FROM invoices WHERE id = ?', [params.id]);
     if (!existing) {
@@ -86,16 +96,21 @@ async function handlePut(
     // Try to update with project_ids first
     try {
       await execute(
-        `UPDATE invoices SET project_id = ?, project_ids = ?, invoice_number = ?, amount = ?, tax = ?, discount = ?, total_amount = ?, status = ?, due_date = ?, issued_date = ?, paid_date = ?, notes = ?, po_no = ?, po_date = ?, signature_image = ?, items = ?, currency = ?, currency_symbol = ?, updated_at = CURRENT_TIMESTAMP
+        `UPDATE invoices SET project_id = ?, project_ids = ?, invoice_number = ?, amount = ?, tax = ?, gst_mode = ?, sgst_igst_percent = ?, cgst_percent = ?, sgst_igst_amount = ?, cgst_amount = ?, discount = ?, total_amount = ?, status = ?, due_date = ?, issued_date = ?, paid_date = ?, notes = ?, po_no = ?, po_date = ?, signature_image = ?, items = ?, currency = ?, currency_symbol = ?, updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
           project_id || null,
           projectIdsJson,
           invoice_number,
           parseFloat(amount),
-          parseFloat(tax || 0),
+          gst.tax,
+          gst.gst_mode,
+          gst.sgst_igst_percent,
+          gst.cgst_percent,
+          gst.sgst_igst_amount,
+          gst.cgst_amount,
           parseFloat(discount || 0),
-          parseFloat(total_amount),
+          gst.total_amount,
           status || 'DRAFT',
           due_date || null,
           issued_date || null,
@@ -122,9 +137,9 @@ async function handlePut(
               project_id || null,
               invoice_number,
               parseFloat(amount),
-              parseFloat(tax || 0),
+              gst.tax,
               parseFloat(discount || 0),
-              parseFloat(total_amount),
+              gst.total_amount,
               status || 'DRAFT',
               due_date || null,
               issued_date || null,
@@ -146,9 +161,9 @@ async function handlePut(
                 project_id || null,
                 invoice_number,
                 parseFloat(amount),
-                parseFloat(tax || 0),
+                gst.tax,
                 parseFloat(discount || 0),
-                parseFloat(total_amount),
+                gst.total_amount,
                 status || 'DRAFT',
                 due_date || null,
                 issued_date || null,
@@ -172,9 +187,9 @@ async function handlePut(
             projectIdsJson,
             invoice_number,
             parseFloat(amount),
-            parseFloat(tax || 0),
+            gst.tax,
             parseFloat(discount || 0),
-            parseFloat(total_amount),
+            gst.total_amount,
             status || 'DRAFT',
             due_date || null,
             issued_date || null,

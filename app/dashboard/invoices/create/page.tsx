@@ -6,8 +6,9 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Save } from 'lucide-react';
 import Link from 'next/link';
-import { invoiceTotalsFromParts } from '@/lib/utils';
 import InvoicePdfExtras from '@/components/InvoicePdfExtras';
+import InvoiceGstSection, { recalcGstTotals, type InvoiceGstFormValues } from '@/components/InvoiceGstSection';
+import type { GstMode } from '@/lib/invoice-gst';
 
 function CreateInvoiceForm() {
   const router = useRouter();
@@ -23,7 +24,6 @@ function CreateInvoiceForm() {
     project_id: '',
     invoice_number: 'Generating…',
     amount: '',
-    tax_percent: '0',
     tax: '0',
     discount: '0',
     total_amount: '0',
@@ -36,6 +36,12 @@ function CreateInvoiceForm() {
     signature_image: '',
     currency: 'INR',
     currency_symbol: '₹',
+  });
+
+  const [gstData, setGstData] = useState<InvoiceGstFormValues>({
+    gst_mode: 'INTRA',
+    sgst_igst_percent: '9',
+    cgst_percent: '9',
   });
 
   useEffect(() => {
@@ -103,17 +109,23 @@ function CreateInvoiceForm() {
     const { name, value } = e.target;
     setFormData((prev) => {
       const updated = { ...prev, [name]: value };
-      
-      if (name === 'amount' || name === 'tax_percent' || name === 'discount') {
-        const amount = parseFloat(updated.amount || '0');
-        const taxPercent = parseFloat(updated.tax_percent || '0');
-        const discount = parseFloat(updated.discount || '0');
-        const totals = invoiceTotalsFromParts(amount, taxPercent, discount);
+
+      if (name === 'amount' || name === 'discount') {
+        const totals = recalcGstTotals(updated.amount, updated.discount, gstData);
         updated.tax = totals.tax;
         updated.total_amount = totals.total_amount;
       }
-      
+
       return updated;
+    });
+  };
+
+  const handleGstChange = (patch: Partial<InvoiceGstFormValues>) => {
+    const nextGst = { ...gstData, ...patch };
+    setGstData(nextGst);
+    setFormData((prev) => {
+      const totals = recalcGstTotals(prev.amount, prev.discount, nextGst);
+      return { ...prev, tax: totals.tax, total_amount: totals.total_amount };
     });
   };
 
@@ -142,8 +154,9 @@ function CreateInvoiceForm() {
       // Use first selected project as primary project_id, or empty string
       const submitData = {
         ...formData,
+        ...gstData,
         project_id: selectedProjects.length > 0 ? selectedProjects[0] : '',
-        project_ids: selectedProjects, // Send all selected projects
+        project_ids: selectedProjects,
       };
       const response = await axios.post('/api/invoices', submitData, {
         headers: {
@@ -348,39 +361,6 @@ function CreateInvoiceForm() {
           </div>
 
           <div>
-            <label htmlFor="tax_percent" className="block text-sm font-medium text-gray-700 mb-2">
-              Tax (%)
-            </label>
-            <input
-              type="number"
-              id="tax_percent"
-              name="tax_percent"
-              value={formData.tax_percent}
-              onChange={handleChange}
-              step="0.01"
-              min="0"
-              max="100"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g. 18"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="tax" className="block text-sm font-medium text-gray-700 mb-2">
-              Tax amount
-            </label>
-            <input
-              type="number"
-              id="tax"
-              name="tax"
-              value={formData.tax}
-              readOnly
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
-            />
-            <p className="text-xs text-gray-500 mt-1">Auto-calculated from amount × tax %</p>
-          </div>
-
-          <div>
             <label htmlFor="discount" className="block text-sm font-medium text-gray-700 mb-2">
               Discount
             </label>
@@ -393,6 +373,31 @@ function CreateInvoiceForm() {
               step="0.01"
               min="0"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <InvoiceGstSection
+            amount={formData.amount}
+            discount={formData.discount}
+            currencySymbol={formData.currency_symbol}
+            value={gstData}
+            onChange={handleGstChange}
+            onTotalsChange={(totals) =>
+              setFormData((prev) => ({ ...prev, tax: totals.tax, total_amount: totals.total_amount }))
+            }
+          />
+
+          <div>
+            <label htmlFor="tax" className="block text-sm font-medium text-gray-700 mb-2">
+              Total GST
+            </label>
+            <input
+              type="number"
+              id="tax"
+              name="tax"
+              value={formData.tax}
+              readOnly
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
             />
           </div>
 

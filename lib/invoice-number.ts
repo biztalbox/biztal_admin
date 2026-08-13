@@ -1,12 +1,12 @@
 import type { PoolConnection } from 'mysql2/promise';
 import { beginTransaction, commit, rollback } from '@/lib/db';
 
-/** BINV + Mon (3 letters) + DD + YY + 4-digit daily sequence, e.g. BINVAug13260001 */
+/** BINV + MON (3 letters, uppercase) + DD + YY + 4-digit daily sequence, e.g. BINVAUG13260001 */
 export function getInvoicePrefix(now = new Date()): string {
-  const month3 = now.toLocaleString('en-US', { month: 'short' }).slice(0, 3);
+  const month3 = now.toLocaleString('en-US', { month: 'short' }).slice(0, 3).toUpperCase();
   const day = String(now.getDate()).padStart(2, '0');
   const year2 = String(now.getFullYear()).slice(-2);
-  return `BINV${month3}${day}${year2}`;
+  return `BINV${month3}${day}${year2}`.toUpperCase();
 }
 
 function escapeRegExp(value: string): string {
@@ -34,7 +34,7 @@ export async function getNextInvoiceNumberInTx(
     }
   }
 
-  return `${prefix}${String(nextSeq).padStart(4, '0')}`;
+  return `${prefix}${String(nextSeq).padStart(4, '0')}`.toUpperCase();
 }
 
 export async function peekNextInvoiceNumber(): Promise<string> {

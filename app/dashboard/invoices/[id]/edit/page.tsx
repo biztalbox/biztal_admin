@@ -7,8 +7,10 @@ import toast from 'react-hot-toast';
 import { ArrowLeft, Save, Download, Trash2, Mail, Bell, History, X, MessageCircle, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { downloadInvoicePDF } from '@/lib/pdf';
-import { invoiceTotalsFromParts, taxPercentFromAmountAndTax } from '@/lib/utils';
+import { assembleInvoicePdfData, parseInvoiceItems } from '@/lib/invoice-pdf-assemble';
 import InvoicePdfExtras from '@/components/InvoicePdfExtras';
+import InvoiceGstSection, { recalcGstTotals, type InvoiceGstFormValues } from '@/components/InvoiceGstSection';
+import { normalizeGstMode } from '@/lib/invoice-gst';
 
 export default function EditInvoicePage() {
   const router = useRouter();
@@ -33,7 +35,6 @@ export default function EditInvoicePage() {
     project_id: '',
     invoice_number: '',
     amount: '',
-    tax_percent: '0',
     tax: '0',
     discount: '0',
     total_amount: '0',
@@ -47,6 +48,12 @@ export default function EditInvoicePage() {
     signature_image: '',
     currency: 'INR',
     currency_symbol: '₹',
+  });
+
+  const [gstData, setGstData] = useState<InvoiceGstFormValues>({
+    gst_mode: 'INTRA',
+    sgst_igst_percent: '9',
+    cgst_percent: '9',
   });
 
   useEffect(() => {
@@ -67,12 +74,15 @@ export default function EditInvoicePage() {
         const inv = invoiceRes.data.data;
         setInvoice(inv);
         const amountNum = parseFloat(inv.amount);
-        const taxNum = parseFloat(inv.tax || 0);
+        setGstData({
+          gst_mode: normalizeGstMode(inv.gst_mode),
+          sgst_igst_percent: String(inv.sgst_igst_percent ?? 9),
+          cgst_percent: String(inv.cgst_percent ?? 9),
+        });
         setFormData({
           project_id: inv.project_id || '',
           invoice_number: inv.invoice_number,
           amount: inv.amount.toString(),
-          tax_percent: taxPercentFromAmountAndTax(amountNum, taxNum),
           tax: (inv.tax || 0).toString(),
           discount: (inv.discount || 0).toString(),
           total_amount: inv.total_amount.toString(),
@@ -141,16 +151,22 @@ export default function EditInvoicePage() {
     setFormData((prev) => {
       const updated = { ...prev, [name]: value };
       
-      if (name === 'amount' || name === 'tax_percent' || name === 'discount') {
-        const amount = parseFloat(updated.amount || '0');
-        const taxPercent = parseFloat(updated.tax_percent || '0');
-        const discount = parseFloat(updated.discount || '0');
-        const totals = invoiceTotalsFromParts(amount, taxPercent, discount);
+      if (name === 'amount' || name === 'discount') {
+        const totals = recalcGstTotals(updated.amount, updated.discount, gstData);
         updated.tax = totals.tax;
         updated.total_amount = totals.total_amount;
       }
       
       return updated;
+    });
+  };
+
+  const handleGstChange = (patch: Partial<InvoiceGstFormValues>) => {
+    const nextGst = { ...gstData, ...patch };
+    setGstData(nextGst);
+    setFormData((prev) => {
+      const totals = recalcGstTotals(prev.amount, prev.discount, nextGst);
+      return { ...prev, tax: totals.tax, total_amount: totals.total_amount };
     });
   };
 
@@ -168,8 +184,9 @@ export default function EditInvoicePage() {
       // Use first selected project as primary project_id, or empty string
       const submitData = {
         ...formData,
+        ...gstData,
         project_id: selectedProjects.length > 0 ? selectedProjects[0] : '',
-        project_ids: selectedProjects, // Send all selected projects
+        project_ids: selectedProjects,
       };
       const response = await axios.put(`/api/invoices/${invoiceId}`, submitData, {
         headers: {
@@ -199,34 +216,26 @@ export default function EditInvoicePage() {
 
     setExporting(true);
     try {
-      const invoiceData = {
-        invoice_number: invoice.invoice_number,
-        issued_date: invoice.issued_date,
-        due_date: invoice.due_date,
-        client: {
-          name: client.name,
-          company: client.company,
-          email: client.email,
-          phone: client.phone,
-          address: client.address,
-          city: client.city,
-          state: client.state,
-          zip_code: client.zip_code,
-          country: client.country,
-          gst_no: client.gst_no,
-        },
-        items: invoice.items ? (typeof invoice.items === 'string' ? JSON.parse(invoice.items) : invoice.items) : null,
-        amount: parseFloat(invoice.amount),
-        tax: parseFloat(invoice.tax || 0),
-        discount: parseFloat(invoice.discount || 0),
-        total_amount: parseFloat(invoice.total_amount),
-        notes: invoice.notes,
-        po_no: invoice.po_no || undefined,
-        po_date: invoice.po_date || undefined,
-        signature_image: invoice.signature_image || undefined,
-        currency: invoice.currency || 'INR',
-        currency_symbol: invoice.currency_symbol || '₹',
+      const invoiceRow = {
+        ...invoice,
+        amount: formData.amount,
+        tax: formData.tax,
+        discount: formData.discount,
+        total_amount: formData.total_amount,
+        gst_mode: gstData.gst_mode,
+        sgst_igst_percent: gstData.sgst_igst_percent,
+        cgst_percent: gstData.cgst_percent,
+        notes: formData.notes,
+        po_no: formData.po_no,
+        po_date: formData.po_date,
+        signature_image: formData.signature_image,
+        currency: formData.currency,
+        currency_symbol: formData.currency_symbol,
       };
+
+      const invoiceData = assembleInvoicePdfData(invoiceRow, client, {
+        items: parseInvoiceItems(invoice),
+      });
 
       downloadInvoicePDF(invoiceData);
       toast.success('Invoice PDF downloaded successfully!');
@@ -826,39 +835,6 @@ Thank you and looking forward to continuing our collaboration.`;
           </div>
 
           <div>
-            <label htmlFor="tax_percent" className="block text-sm font-medium text-gray-700 mb-2">
-              Tax (%)
-            </label>
-            <input
-              type="number"
-              id="tax_percent"
-              name="tax_percent"
-              value={formData.tax_percent}
-              onChange={handleChange}
-              step="0.01"
-              min="0"
-              max="100"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g. 18"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="tax" className="block text-sm font-medium text-gray-700 mb-2">
-              Tax amount
-            </label>
-            <input
-              type="number"
-              id="tax"
-              name="tax"
-              value={formData.tax}
-              readOnly
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
-            />
-            <p className="text-xs text-gray-500 mt-1">Auto-calculated from amount × tax %</p>
-          </div>
-
-          <div>
             <label htmlFor="discount" className="block text-sm font-medium text-gray-700 mb-2">
               Discount
             </label>
@@ -871,6 +847,31 @@ Thank you and looking forward to continuing our collaboration.`;
               step="0.01"
               min="0"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <InvoiceGstSection
+            amount={formData.amount}
+            discount={formData.discount}
+            currencySymbol={formData.currency_symbol}
+            value={gstData}
+            onChange={handleGstChange}
+            onTotalsChange={(totals) =>
+              setFormData((prev) => ({ ...prev, tax: totals.tax, total_amount: totals.total_amount }))
+            }
+          />
+
+          <div>
+            <label htmlFor="tax" className="block text-sm font-medium text-gray-700 mb-2">
+              Total GST
+            </label>
+            <input
+              type="number"
+              id="tax"
+              name="tax"
+              value={formData.tax}
+              readOnly
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
             />
           </div>
 
