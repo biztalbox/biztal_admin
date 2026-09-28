@@ -65,7 +65,7 @@ function imageFormatFromDataUrl(dataUrl: string): 'PNG' | 'JPEG' {
 const COMPANY_DETAILS = {
   name: 'BIZTALBOX MARKETING & BUSINESS CONSULTING PVT. LTD.',
   address: 'A-11, 2ND FLOOR, SECTOR 8 DWARKA,',
-  city: 'New Delhi, Delhi - 110075',
+  city: 'New Delhi, Delhi - 110077',
   gstin: '07AANCB1128J1ZO',
   state: 'Delhi, Code : 07',
   contact: '+91 9485699709',
