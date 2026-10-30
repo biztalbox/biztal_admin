@@ -4,6 +4,7 @@ import { queryOne, query } from '@/lib/db';
 import { generateInvoicePDF } from '@/lib/pdf';
 import { sendInvoiceEmail } from '@/lib/email';
 import { generateId, parseSecondaryEmailsForCc } from '@/lib/utils';
+import { bankForInvoicePdf } from '@/lib/company-bank-db';
 import {
   assembleInvoicePdfData,
   parseInvoiceItems,
@@ -44,10 +45,12 @@ async function handlePost(
     // Get project details if project_id exists (for backward compatibility)
     const { project, projects } = await resolveInvoiceProjects(invoice);
     const items = parseInvoiceItems(invoice);
+    const bank = await bankForInvoicePdf(invoice.print_bank_details);
     const invoiceData = assembleInvoicePdfData(invoice, client, {
       project,
       projects,
       items,
+      bank,
     });
 
     // Generate PDF

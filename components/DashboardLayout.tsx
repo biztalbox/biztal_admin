@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   Layers,
+  Settings,
 } from 'lucide-react';
 
 interface User {
@@ -55,6 +56,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/dashboard/clients', label: 'Clients', icon: Users },
     { href: '/dashboard/services', label: 'Services', icon: Layers },
     { href: '/dashboard/employees', label: 'Employees', icon: UserCog },
+    { href: '/dashboard/settings', label: 'Settings', icon: Settings },
   ];
 
   const isActive = (href: string) => {

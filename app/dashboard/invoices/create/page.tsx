@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { ArrowLeft, Save } from 'lucide-react';
 import Link from 'next/link';
 import InvoicePdfExtras from '@/components/InvoicePdfExtras';
+import InvoiceBankPrintOption from '@/components/InvoiceBankPrintOption';
 import InvoiceGstSection, { recalcGstTotals, type InvoiceGstFormValues } from '@/components/InvoiceGstSection';
 import type { GstMode } from '@/lib/invoice-gst';
 
@@ -34,6 +35,7 @@ function CreateInvoiceForm() {
     po_no: '',
     po_date: '',
     signature_image: '',
+    print_bank_details: true,
     currency: 'INR',
     currency_symbol: '₹',
   });
@@ -462,6 +464,11 @@ function CreateInvoiceForm() {
             po_date={formData.po_date}
             signature_image={formData.signature_image}
             onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
+          />
+
+          <InvoiceBankPrintOption
+            printBankDetails={formData.print_bank_details}
+            onChange={(print_bank_details) => setFormData((prev) => ({ ...prev, print_bank_details }))}
           />
         </div>
 

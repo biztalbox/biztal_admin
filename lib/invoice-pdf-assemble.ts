@@ -1,5 +1,6 @@
 import type { InvoiceData } from '@/lib/pdf';
 import { gstBreakdownFromStoredInvoice } from '@/lib/invoice-gst';
+import { shouldPrintBankDetails, type CompanyBankDetails } from '@/lib/company-bank';
 
 type DbRow = Record<string, unknown>;
 
@@ -10,9 +11,11 @@ export function assembleInvoicePdfData(
     project?: { name: string; budget: number } | null;
     projects?: Array<{ name: string; budget: number }>;
     items?: InvoiceData['items'];
+    bank?: CompanyBankDetails | null;
   } = {}
 ): InvoiceData {
   const gst = gstBreakdownFromStoredInvoice(invoice);
+  const printBankDetails = shouldPrintBankDetails(invoice.print_bank_details);
   return {
     invoice_number: String(invoice.invoice_number),
     issued_date: invoice.issued_date ? String(invoice.issued_date) : undefined,
@@ -47,6 +50,8 @@ export function assembleInvoicePdfData(
     notes: invoice.notes ? String(invoice.notes) : undefined,
     currency: invoice.currency ? String(invoice.currency) : 'INR',
     currency_symbol: invoice.currency_symbol ? String(invoice.currency_symbol) : '₹',
+    print_bank_details: printBankDetails,
+    bank: printBankDetails && options.bank ? options.bank : undefined,
   };
 }
 

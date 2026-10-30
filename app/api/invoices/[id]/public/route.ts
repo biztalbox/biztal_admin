@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { generateInvoicePDF } from '@/lib/pdf';
+import { bankForInvoicePdf } from '@/lib/company-bank-db';
 import {
   assembleInvoicePdfData,
   parseInvoiceItems,
@@ -31,10 +32,12 @@ async function handleGet(
 
     const { project, projects } = await resolveInvoiceProjects(invoice);
     const items = parseInvoiceItems(invoice);
+    const bank = await bankForInvoicePdf(invoice.print_bank_details);
     const invoiceData = assembleInvoicePdfData(invoice, client, {
       project,
       projects,
       items,
+      bank,
     });
 
     const pdf = generateInvoicePDF(invoiceData);

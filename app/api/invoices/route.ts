@@ -4,6 +4,8 @@ import { query, queryOne, beginTransaction, commit, rollback } from '@/lib/db';
 import { generateId } from '@/lib/utils';
 import { getInvoicePrefix, getNextInvoiceNumberInTx } from '@/lib/invoice-number';
 import { computeInvoiceGstTotals } from '@/lib/invoice-gst';
+import { shouldPrintBankDetails } from '@/lib/company-bank';
+import { ensureCompanyBankSchema } from '@/lib/company-bank-db';
 
 async function handleGet(req: NextRequest, userId: string) {
   try {
@@ -68,6 +70,7 @@ async function handlePost(req: NextRequest, userId: string) {
       po_no,
       po_date,
       signature_image,
+      print_bank_details,
       gst_mode,
       sgst_igst_percent,
       cgst_percent,
@@ -88,6 +91,9 @@ async function handlePost(req: NextRequest, userId: string) {
       cgst_percent: cgst_percent ?? 9,
     });
 
+    const printBankFlag = shouldPrintBankDetails(print_bank_details) ? 1 : 0;
+    await ensureCompanyBankSchema();
+
     const id = generateId();
     // Store project_ids as JSON string if provided
     const projectIdsJson = project_ids && Array.isArray(project_ids) && project_ids.length > 0
@@ -102,8 +108,8 @@ async function handlePost(req: NextRequest, userId: string) {
         // Try to insert with project_ids first
         try {
           await connection.execute(
-            `INSERT INTO invoices (id, client_id, project_id, project_ids, invoice_number, amount, tax, gst_mode, sgst_igst_percent, cgst_percent, sgst_igst_amount, cgst_amount, discount, total_amount, status, due_date, issued_date, notes, po_no, po_date, signature_image, items, currency, currency_symbol)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO invoices (id, client_id, project_id, project_ids, invoice_number, amount, tax, gst_mode, sgst_igst_percent, cgst_percent, sgst_igst_amount, cgst_amount, discount, total_amount, status, due_date, issued_date, notes, po_no, po_date, signature_image, print_bank_details, items, currency, currency_symbol)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               id,
               client_id,
@@ -126,6 +132,7 @@ async function handlePost(req: NextRequest, userId: string) {
               po_no?.trim() || null,
               po_date || null,
               signature_image || null,
+              printBankFlag,
               items ? JSON.stringify(items) : null,
               currency || 'INR',
               currency_symbol || '₹',

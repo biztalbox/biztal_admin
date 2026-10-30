@@ -9,6 +9,8 @@ import Link from 'next/link';
 import { downloadInvoicePDF } from '@/lib/pdf';
 import { assembleInvoicePdfData, parseInvoiceItems } from '@/lib/invoice-pdf-assemble';
 import InvoicePdfExtras from '@/components/InvoicePdfExtras';
+import InvoiceBankPrintOption from '@/components/InvoiceBankPrintOption';
+import { shouldPrintBankDetails, type CompanyBankDetails } from '@/lib/company-bank';
 import InvoiceGstSection, { recalcGstTotals, type InvoiceGstFormValues } from '@/components/InvoiceGstSection';
 import { normalizeGstMode } from '@/lib/invoice-gst';
 
@@ -46,6 +48,7 @@ export default function EditInvoicePage() {
     po_no: '',
     po_date: '',
     signature_image: '',
+    print_bank_details: true,
     currency: 'INR',
     currency_symbol: '₹',
   });
@@ -94,6 +97,7 @@ export default function EditInvoicePage() {
           po_no: inv.po_no || '',
           po_date: inv.po_date || '',
           signature_image: inv.signature_image || '',
+          print_bank_details: shouldPrintBankDetails(inv.print_bank_details),
           currency: inv.currency || 'INR',
           currency_symbol: inv.currency_symbol || '₹',
         });
@@ -229,12 +233,28 @@ export default function EditInvoicePage() {
         po_no: formData.po_no,
         po_date: formData.po_date,
         signature_image: formData.signature_image,
+        print_bank_details: formData.print_bank_details,
         currency: formData.currency,
         currency_symbol: formData.currency_symbol,
       };
 
+      let bank: CompanyBankDetails | undefined;
+      if (formData.print_bank_details) {
+        try {
+          const token = localStorage.getItem('token');
+          const bankRes = await axios.get('/api/settings/bank', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (bankRes.data?.success) bank = bankRes.data.data;
+        } catch (bankError) {
+          console.error('Load bank details for PDF error:', bankError);
+          toast.error('Bank details could not be loaded. Downloading the invoice without them.');
+        }
+      }
+
       const invoiceData = assembleInvoicePdfData(invoiceRow, client, {
         items: parseInvoiceItems(invoice),
+        bank,
       });
 
       downloadInvoicePDF(invoiceData);
@@ -969,6 +989,11 @@ Thank you and looking forward to continuing our collaboration.`;
             po_date={formData.po_date}
             signature_image={formData.signature_image}
             onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))}
+          />
+
+          <InvoiceBankPrintOption
+            printBankDetails={formData.print_bank_details}
+            onChange={(print_bank_details) => setFormData((prev) => ({ ...prev, print_bank_details }))}
           />
         </div>
 

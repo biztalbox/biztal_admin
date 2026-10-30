@@ -1,6 +1,7 @@
 // @ts-ignore - jsPDF types may not be perfect
 import jsPDF from 'jspdf';
 import { getLogoBase64 } from './logo';
+import { printableBankRows, type CompanyBankDetails } from './company-bank';
 
 // Extend jsPDF type if needed
 declare module 'jspdf' {
@@ -54,6 +55,8 @@ interface InvoiceData {
   notes?: string;
   currency?: string;
   currency_symbol?: string;
+  print_bank_details?: boolean;
+  bank?: CompanyBankDetails;
 }
 
 export type { InvoiceData };
@@ -462,13 +465,76 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
     yPos += notesLines.length * 5;
   }
 
-  // ========== FOOTER SECTION ==========
+  // ========== BANK DETAILS + SIGNATURE + FOOTER ==========
+  const bankRows =
+    invoice.print_bank_details !== false && invoice.bank
+      ? printableBankRows(invoice.bank)
+      : [];
+
+  const footerLineY = pageHeight - 20;
+  let bankBoxBottom: number | null = null;
+
+  if (bankRows.length > 0) {
+    const boxWidth = 132;
+    const labelWidth = 42;
+    const valueWidth = boxWidth - labelWidth - 6;
+    const lineH = 4.2;
+    doc.setFont('sans-serif', 'normal');
+    doc.setFontSize(8);
+    const measured = bankRows.map((row) => ({
+      ...row,
+      valueLines: doc.splitTextToSize(row.value, valueWidth) as string[],
+    }));
+    const note = 'Kindly transfer the payment to the account mentioned above.';
+    const noteLines = doc.splitTextToSize(note, boxWidth - 6) as string[];
+    const visualLines = measured.reduce((sum, row) => sum + row.valueLines.length, 0);
+    const headerH = 7;
+    const boxH = headerH + visualLines * lineH + 2 + noteLines.length * 3.4 + 3;
+    bankBoxBottom = footerLineY - 4;
+    const boxTop = bankBoxBottom - boxH;
+
+    if (yPos > boxTop - 3) {
+      doc.addPage();
+    }
+
+    doc.setFillColor(DARK_TEAL.r, DARK_TEAL.g, DARK_TEAL.b);
+    doc.rect(margin, boxTop, boxWidth, headerH, 'F');
+    doc.setDrawColor(DARK_TEAL.r, DARK_TEAL.g, DARK_TEAL.b);
+    doc.setLineWidth(0.35);
+    doc.rect(margin, boxTop, boxWidth, boxH, 'S');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('sans-serif', 'bold');
+    doc.setFontSize(8.5);
+    doc.text("Company's Bank Details", margin + 2.5, boxTop + 4.6);
+
+    let lineY = boxTop + headerH + 3.4;
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(8);
+    measured.forEach((row) => {
+      doc.setFont('sans-serif', 'bold');
+      doc.text(row.label, margin + 2.5, lineY);
+      doc.text(':', margin + labelWidth - 1.5, lineY);
+      doc.setFont('sans-serif', 'normal');
+      doc.text(row.valueLines, margin + labelWidth + 1.5, lineY);
+      lineY += row.valueLines.length * lineH;
+    });
+
+    lineY += 1.2;
+    doc.setFont('sans-serif', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(90, 90, 90);
+    doc.text(noteLines, margin + 2.5, lineY);
+    doc.setTextColor(0, 0, 0);
+  }
+
   if (invoice.signature_image) {
     try {
       const sigWidth = 42;
       const sigHeight = 18;
       const sigX = pageWidth - margin - sigWidth;
-      const sigY = pageHeight - 38;
+      const sigBottom = bankBoxBottom ?? footerLineY;
+      const sigY = sigBottom - sigHeight;
       doc.addImage(
         invoice.signature_image,
         imageFormatFromDataUrl(invoice.signature_image),
@@ -482,7 +548,7 @@ export function generateInvoicePDF(invoice: InvoiceData): jsPDF {
     }
   }
 
-  yPos = pageHeight - 20;
+  yPos = footerLineY;
   
   // Dark teal/green separator line
   doc.setDrawColor(DARK_TEAL.r, DARK_TEAL.g, DARK_TEAL.b);

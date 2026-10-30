@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/middleware';
 import { queryOne, execute } from '@/lib/db';
 import { computeInvoiceGstTotals } from '@/lib/invoice-gst';
+import { shouldPrintBankDetails } from '@/lib/company-bank';
+import { ensureCompanyBankSchema } from '@/lib/company-bank-db';
 
 async function handleGet(
   req: NextRequest,
@@ -51,6 +53,7 @@ async function handlePut(
       po_no,
       po_date,
       signature_image,
+      print_bank_details,
       gst_mode,
       sgst_igst_percent,
       cgst_percent,
@@ -70,6 +73,9 @@ async function handlePut(
       sgst_igst_percent: sgst_igst_percent ?? (String(gst_mode || '').toUpperCase() === 'INTER' ? 18 : 9),
       cgst_percent: cgst_percent ?? 9,
     });
+
+    const printBankFlag = shouldPrintBankDetails(print_bank_details) ? 1 : 0;
+    await ensureCompanyBankSchema();
 
     const existing = await queryOne('SELECT id FROM invoices WHERE id = ?', [params.id]);
     if (!existing) {
@@ -96,7 +102,7 @@ async function handlePut(
     // Try to update with project_ids first
     try {
       await execute(
-        `UPDATE invoices SET project_id = ?, project_ids = ?, invoice_number = ?, amount = ?, tax = ?, gst_mode = ?, sgst_igst_percent = ?, cgst_percent = ?, sgst_igst_amount = ?, cgst_amount = ?, discount = ?, total_amount = ?, status = ?, due_date = ?, issued_date = ?, paid_date = ?, notes = ?, po_no = ?, po_date = ?, signature_image = ?, items = ?, currency = ?, currency_symbol = ?, updated_at = CURRENT_TIMESTAMP
+        `UPDATE invoices SET project_id = ?, project_ids = ?, invoice_number = ?, amount = ?, tax = ?, gst_mode = ?, sgst_igst_percent = ?, cgst_percent = ?, sgst_igst_amount = ?, cgst_amount = ?, discount = ?, total_amount = ?, status = ?, due_date = ?, issued_date = ?, paid_date = ?, notes = ?, po_no = ?, po_date = ?, signature_image = ?, print_bank_details = ?, items = ?, currency = ?, currency_symbol = ?, updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
           project_id || null,
@@ -119,6 +125,7 @@ async function handlePut(
           po_no?.trim() || null,
           po_date || null,
           signature_image || null,
+          printBankFlag,
           items ? JSON.stringify(items) : null,
           currency || 'INR',
           currency_symbol || '₹',
